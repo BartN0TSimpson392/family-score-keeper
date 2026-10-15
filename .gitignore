@@ -134,3 +134,14 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Expo / app specifics
+.expo/
+.DS_Store
+dist/
+web-build/
+/ios
+/android
+functions/lib/
+functions/node_modules/
+*.log

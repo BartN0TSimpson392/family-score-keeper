@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Family Score Keeper",
+    "slug": "family-score-keeper",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.bartekw.familyscorekeeper",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.bartekw.familyscorekeeper",
+      "permissions": []
+    },
+    "scheme": "familyscorekeeper",
+    "plugins": ["expo-router"],
+    "backgroundColor": "#F4F1EA",
+    "extra": {
+      "router": {}
+    },
+    "owner": "bartnotsimpson"
+  }
+}
