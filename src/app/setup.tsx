@@ -6,7 +6,8 @@ import { presetById, presetByName } from '@/data/presets';
 import { useFamily } from '@/data/store';
 import type { Mode } from '@/data/types';
 import { useI18n } from '@/i18n';
-import { Avatar, BigButton, Body, ErrorText, Field, H1, Screen, TopBar } from '@/ui/components';
+import { Avatar, BigButton, Body, ErrorText, Field, H1, Screen, SmallButton, TopBar } from '@/ui/components';
+import { rulesLine } from '@/ui/format';
 import { colors } from '@/ui/theme';
 
 const MAX_PLAYERS = 8;
@@ -34,6 +35,9 @@ export default function Setup() {
   const [startText, setStartText] = useState(preset && preset.mode === 'down' ? String(preset.start) : '');
   const [goalText, setGoalText] = useState(preset && preset.mode === 'down' ? String(preset.target ?? 0) : '0');
   const [picked, setPicked] = useState<string[]>([session.uid]);
+  // A game from the list skips the rules and only asks what it needs. "Change the rules" brings the full form back.
+  const [customize, setCustomize] = useState(false);
+  const quick = !!preset && !customize;
   const [teamMode, setTeamMode] = useState(preset?.sides === 'teams');
   /** Person id to team number (1 to 4). Anyone missing is not playing. */
   const [teamOf, setTeamOf] = useState<Record<string, number>>({});
@@ -189,6 +193,33 @@ export default function Setup() {
       <TopBar onBack={() => router.back()} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+          {quick && preset ? (
+            <>
+              <H1>{preset.name}</H1>
+              <Body>
+                {rulesLine(
+                  { mode, start: parseInt(startText, 10) || 0, target: mode === 'up' ? (targetText ? parseInt(targetText, 10) : null) : parseInt(goalText, 10) || 0, penalty, winBy: winByTwo ? 2 : undefined },
+                  t,
+                )}
+              </Body>
+              {preset.targets && preset.targets.length > 1 ? (
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.small}>{t('playTo')}</Text>
+                  <View style={styles.chips}>
+                    {preset.targets.map((n) => {
+                      const on = targetText === String(n);
+                      return (
+                        <Pressable key={n} onPress={() => setTargetText(String(n))} accessibilityRole="radio" accessibilityState={{ selected: on }} style={[styles.chip, on && { backgroundColor: colors.teal }]}>
+                          <Text style={[styles.chipText, on && { color: colors.cream }]}>{n}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+            </>
+          ) : (
+          <>
           <H1>{t('setupH')}</H1>
 
           <Field label={t('fldGameName')} value={name} onChangeText={(v) => { setName(v); setError(''); }} placeholder={t('gameNamePlaceholder')} autoCapitalize="words" returnKeyType="done" />
@@ -246,10 +277,15 @@ export default function Setup() {
             </View>
           ) : null}
 
+          </>
+          )}
+
+          {!quick || preset?.sides === 'either' ? (
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <ModeButton label={t('sideSolo')} sub={t('sideSoloSub')} active={!teamMode} onPress={() => setTeamMode(false)} />
             <ModeButton label={t('sideTeams')} sub={t('sideTeamsSub')} active={teamMode} onPress={() => setTeamMode(true)} />
           </View>
+          ) : null}
 
           <View style={{ gap: 4 }}>
             <Text style={styles.section}>{teamMode ? t('teamsH') : t('playersH')}</Text>
@@ -299,7 +335,9 @@ export default function Setup() {
             </View>
           ) : null}
 
+          {!quick || dealer ? (
           <View style={styles.dealerBox}>
+            {!quick ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={styles.section}>🃏 {t('trackDealer')}</Text>
@@ -307,6 +345,7 @@ export default function Setup() {
               </View>
               <Switch value={dealer} onValueChange={setDealer} accessibilityLabel={t('trackDealer')} trackColor={{ true: colors.teal }} />
             </View>
+            ) : null}
             {dealer ? (
               <View style={{ gap: 8 }}>
                 <Text style={styles.small}>{t('firstDealer')}</Text>
@@ -324,6 +363,7 @@ export default function Setup() {
               </View>
             ) : null}
           </View>
+          ) : null}
           {serve ? (
             <View style={styles.dealerBox}>
               <Text style={styles.section}>🏓 {t('firstServer')}</Text>
@@ -341,6 +381,7 @@ export default function Setup() {
             </View>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
+          {quick ? <SmallButton label={t('customizeRules')} style={{ minHeight: 52, borderColor: colors.inputBorder }} onPress={() => setCustomize(true)} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

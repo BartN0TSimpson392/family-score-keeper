@@ -272,6 +272,8 @@ const pl: Record<string, string> = {
   cornholeTwoSides: 'W cornhole grają dwie strony. Wybierz dokładnie dwóch graczy lub dwie drużyny.',
   tapToScore: 'Dotknij, aby zdobyć punkt',
   plusOne: '+1',
+  playTo: 'Gramy do',
+  customizeRules: 'Zmień zasady',
 };
 
 export default pl as unknown as Dict;

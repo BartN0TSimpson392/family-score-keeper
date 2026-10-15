@@ -280,6 +280,8 @@ const en = {
   cornholeTwoSides: 'Cornhole is played between two sides. Pick exactly two players or two teams.',
   tapToScore: 'Tap to score a point',
   plusOne: '+1',
+  playTo: 'Play to',
+  customizeRules: 'Change the rules',
 } as const;
 
 export type Dict = Record<keyof typeof en, string>;

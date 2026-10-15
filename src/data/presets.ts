@@ -27,6 +27,8 @@ export type Preset = {
   scorer?: 'tap' | 'cornhole';
   /** The serve moves every few points. */
   serve?: boolean;
+  /** The usual choices for "play to", the first one being the default. */
+  targets?: number[];
 };
 
 const up = (id: string, name: string, cat: Category, target: number | null, sides: Preset['sides'], min: number, max: number, dealer = false, penalty = false): Preset => ({
@@ -74,6 +76,30 @@ export function presetByName(name: string): Preset | undefined {
 }
 
 export const CATEGORIES: Category[] = ['cards', 'dice', 'board', 'lawn'];
+
+const TARGETS: Record<string, number[]> = {
+  hearts: [100, 50, 150],
+  spades: [500, 300, 250],
+  euchre: [10, 5],
+  pinochle: [150, 1500],
+  pitch: [11, 21],
+  canasta: [5000, 7500],
+  rummy500: [500, 1000],
+  ginrummy: [100, 200],
+  cribbage: [121, 61],
+  uno: [500, 250, 1000],
+  farkle: [10000, 5000],
+  dominoes: [100, 150, 200],
+  backgammon: [7, 5, 3, 1],
+  cornhole: [21, 15, 11],
+  pingpong: [11, 21],
+  pickleball: [11, 15, 21],
+  volleyball: [25, 15],
+  spikeball: [21, 11, 15],
+  horseshoes: [21, 15],
+  bocce: [12, 16, 21],
+};
+for (let i = 0; i < PRESETS.length; i++) if (TARGETS[PRESETS[i].id]) PRESETS[i] = { ...PRESETS[i], targets: TARGETS[PRESETS[i].id] };
 
 export function presetById(id: string | undefined): Preset | undefined {
   return id ? PRESETS.find((p) => p.id === id) : undefined;
