@@ -14,11 +14,26 @@
     },
     "android": {
       "package": "com.bartekw.familyscorekeeper",
-      "permissions": []
+      "permissions": [],
+      "adaptiveIcon": {
+        "backgroundColor": "#1F2A44",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
     },
     "scheme": "familyscorekeeper",
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 260,
+          "backgroundColor": "#1F2A44"
+        }
+      ],
       "expo-localization",
       [
         "expo-image-picker",
@@ -29,10 +44,14 @@
         }
       ]
     ],
-    "backgroundColor": "#F4F1EA",
+    "backgroundColor": "#1F2A44",
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "887ee359-dbd8-4da7-be13-3a4c7bd03104"
+      }
     },
-    "owner": "bartnotsimpson"
+    "owner": "bartnotsimpson",
+    "icon": "./assets/icon.png"
   }
 }

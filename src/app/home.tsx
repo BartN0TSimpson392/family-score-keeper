@@ -49,15 +49,16 @@ export default function Home() {
             <BigButton label={t('startGame')} onPress={startNew} />
           )}
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <BigButton label={t('historyBtn')} tone="teal" height={72} style={{ flex: 1 }} onPress={() => router.push('/history')} />
-            <BigButton
-              label={waiting > 0 ? `${t('familyShort')} (${waiting})` : t('familyShort')}
-              tone="teal"
-              height={72}
-              style={{ flex: 1 }}
-              onPress={() => router.push('/family')}
-            />
+            <BigButton label={t('historyShort')} tone="teal" height={72} style={{ flex: 1 }} onPress={() => router.push('/history')} />
+            <BigButton label={t('statsBtn')} tone="teal" height={72} style={{ flex: 1 }} onPress={() => router.push('/stats')} />
           </View>
+          <BigButton
+            label={t('familyBtn')}
+            sub={waiting > 0 ? plural('pendingBadge', waiting) : undefined}
+            tone="outline"
+            height={waiting > 0 ? 80 : 64}
+            onPress={() => router.push('/family')}
+          />
         </View>
       }
     >
