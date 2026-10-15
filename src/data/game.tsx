@@ -5,6 +5,7 @@ import type { LiveGame, LivePlayer, Mode } from './types';
 
 const LIVE_KEY = 'fsk.live';
 const NAMES_KEY = 'fsk.gameNames';
+const RULES_KEY = 'fsk.gameRules';
 const MAX_NAMES = 20;
 
 /** The same game typed in different ways ("Black Jack ", "blackjack") should not be two different games. */
@@ -65,11 +66,16 @@ export function winnersOf(g: LiveGame): string[] {
   return [];
 }
 
+/** The rules a game was last started with on this phone, so picking it again fills them in. */
+export type Rules = { mode: Mode; start: number; target: number | null; dealer: boolean };
+
 export type GameStore = {
   ready: boolean;
   game: LiveGame | null;
   /** Names of games played before on this phone, newest first. */
   recentNames: string[];
+  /** Rules last used for a game name on this phone (even if that game was never saved). */
+  rulesFor: (name: string) => Rules | undefined;
   startGame: (p: { name: string; mode: Mode; start: number; target: number | null; players: LivePlayer[]; dealer: boolean; firstDealerUid: string | null }) => void;
   /** Adds one round. `points` holds each player's change in score. */
   addRound: (points: Record<string, number>) => void;
@@ -83,11 +89,13 @@ const Ctx = createContext<GameStore | null>(null);
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [game, setGame] = useState<LiveGame | null>(null);
   const [recentNames, setRecentNames] = useState<string[]>([]);
+  const [rules, setRules] = useState<Record<string, Rules>>({});
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    Promise.all([AsyncStorage.getItem(LIVE_KEY), AsyncStorage.getItem(NAMES_KEY)])
-      .then(([rawGame, rawNames]) => {
+    Promise.all([AsyncStorage.getItem(LIVE_KEY), AsyncStorage.getItem(NAMES_KEY), AsyncStorage.getItem(RULES_KEY)])
+      .then(([rawGame, rawNames, rawRules]) => {
+        if (rawRules) setRules(JSON.parse(rawRules) as Record<string, Rules>);
         if (rawGame) {
           const saved = JSON.parse(rawGame) as LiveGame;
           if (typeof saved.start !== 'number') {
@@ -136,12 +144,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       firstDealerUid: dealer ? firstDealerUid ?? players[0]?.uid ?? null : null,
       rounds: [],
     });
+    setRules((prev) => {
+      const next = { ...prev, [gameKeyFor(gameName)]: { mode, start, target, dealer } };
+      AsyncStorage.setItem(RULES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
     setRecentNames((prev) => {
       const next = [gameName, ...prev.filter((n) => gameKeyFor(n) !== gameKeyFor(gameName))].slice(0, MAX_NAMES);
       AsyncStorage.setItem(NAMES_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
   }, []);
+
+  const rulesFor = useCallback((name: string) => rules[gameKeyFor(name)], [rules]);
 
   const addRound = useCallback<GameStore['addRound']>((points) => {
     setGame((g) => (g ? { ...g, rounds: [...g.rounds, { points, at: Date.now() }] } : g));
@@ -154,8 +169,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const endGame = useCallback(() => setGame(null), []);
 
   const value = useMemo<GameStore>(
-    () => ({ ready, game, recentNames, startGame, addRound, undo, endGame }),
-    [ready, game, recentNames, startGame, addRound, undo, endGame],
+    () => ({ ready, game, recentNames, rulesFor, startGame, addRound, undo, endGame }),
+    [ready, game, recentNames, rulesFor, startGame, addRound, undo, endGame],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

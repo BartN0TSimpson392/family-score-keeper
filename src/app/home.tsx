@@ -62,13 +62,13 @@ export default function Home() {
         </View>
       }
     >
-      <View style={styles.header}>
+      <Text style={styles.family}>{session.familyName}</Text>
+      <View style={styles.me}>
         <Avatar name={session.userName || '?'} tint={me?.tint ?? colors.border} photoUri={session.photoUri} size={64} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.family}>{session.familyName}</Text>
+          <H1>{t('homeH', { name: session.userName })}</H1>
         </View>
       </View>
-      <H1>{t('homeH', { name: session.userName })}</H1>
       <Body>{plural('peopleCount', members.length)}</Body>
       {waiting > 0 ? <Body style={{ color: colors.primary, fontWeight: '700' }}>{plural('pendingBadge', waiting)}</Body> : null}
     </Screen>
@@ -76,6 +76,6 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 12 },
-  family: { fontWeight: '700', fontSize: 22, color: colors.teal },
+  me: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  family: { fontWeight: '800', fontSize: 16, letterSpacing: 1.3, textTransform: 'uppercase', color: colors.teal, paddingTop: 12 },
 });

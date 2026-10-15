@@ -15,7 +15,6 @@ export function RoundsTable({
   rounds,
   totals,
   start = 0,
-  dealers,
 }: {
   players: P[];
   rounds: { points: Record<string, number> }[];
@@ -23,16 +22,14 @@ export function RoundsTable({
   totals: Record<string, number>;
   /** Where everyone started. Shown as its own row when it is not zero. */
   start?: number;
-  /** Who dealt each round, same order as `rounds`. Leave out when the dealer is not tracked. */
-  dealers?: (string | null)[];
 }) {
   const { t } = useI18n();
   const wide = players.length > 4;
   const colStyle = wide ? { width: 84 } : { flex: 1 };
-  const firstCol = { width: 48 };
+  const firstCol = { width: 76 };
 
   const table = (
-    <View style={{ minWidth: wide ? 48 + players.length * 84 : undefined }}>
+    <View style={{ minWidth: wide ? 76 + players.length * 84 : undefined }}>
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.headText, firstCol]}>{t('roundShort')}</Text>
         {players.map((p) => (
@@ -52,17 +49,16 @@ export function RoundsTable({
           <Text style={[styles.cell, styles.muted, firstCol]}>{i + 1}</Text>
           {players.map((p) => {
             const v = r.points[p.uid] ?? 0;
-            const dealt = dealers?.[i] === p.uid;
             return (
               <Text key={p.uid} style={[styles.cell, colStyle, v === 0 && styles.muted]} accessibilityLabel={`${p.name}, ${t('roundTitle', { n: i + 1 })}: ${v}`}>
-                {dealt ? '🃏 ' : ''}{sign(v)}
+                {sign(v)}
               </Text>
             );
           })}
         </View>
       ))}
       <View style={[styles.row, styles.total]}>
-        <Text style={[styles.cell, styles.totalText, firstCol]}>{t('totalLabel')}</Text>
+        <Text style={[styles.cell, styles.totalText, firstCol]} numberOfLines={1} adjustsFontSizeToFit>{t('totalLabel')}</Text>
         {players.map((p) => (
           <Text key={p.uid} style={[styles.cell, styles.totalText, colStyle]}>{totals[p.uid] ?? start}</Text>
         ))}
@@ -92,5 +88,5 @@ const styles = StyleSheet.create({
   cell: { paddingHorizontal: 6, paddingVertical: 8, textAlign: 'center', fontSize: 19, fontWeight: '600', color: colors.ink },
   headText: { fontSize: 16, fontWeight: '800', color: colors.teal },
   muted: { color: colors.soft, fontWeight: '500' },
-  totalText: { fontWeight: '800', fontSize: 21 },
+  totalText: { fontWeight: '800', fontSize: 20 },
 });

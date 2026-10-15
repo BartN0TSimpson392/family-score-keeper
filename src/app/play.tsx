@@ -30,7 +30,6 @@ export default function Play() {
   const dealerUid = dealerFor(game, game.rounds.length);
   const dealerName = game.players.find((p) => p.uid === dealerUid)?.name;
   const lastRound = game.rounds[game.rounds.length - 1];
-  const dealers = game.dealer ? game.rounds.map((_, i) => dealerFor(game, i)) : undefined;
 
   const openEntry = () => {
     setTexts({});
@@ -125,7 +124,6 @@ export default function Play() {
                 <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={52} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.playerName} numberOfLines={1}>{isWinner ? '🏆 ' : isLeader ? '👑 ' : ''}{p.name}</Text>
-                  {p.uid === dealerUid ? <Text style={styles.badge}>🃏 {t('dealerBadge')}</Text> : null}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.score} adjustsFontSizeToFit numberOfLines={1} accessibilityLabel={`${p.name}: ${scores[p.uid]}`}>{scores[p.uid]}</Text>
@@ -139,7 +137,7 @@ export default function Play() {
         {game.rounds.length > 0 ? (
           <View style={{ gap: 8, marginTop: 4 }}>
             <Text style={styles.sectionLabel}>{t('roundsH')}</Text>
-            <RoundsTable players={game.players} rounds={game.rounds} totals={scores} start={game.start} dealers={dealers} />
+            <RoundsTable players={game.players} rounds={game.rounds} totals={scores} start={game.start} />
           </View>
         ) : (
           <Text style={styles.empty}>{t('noRoundsYet')}</Text>

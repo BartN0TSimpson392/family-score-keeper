@@ -15,7 +15,7 @@ export default function Setup() {
   const router = useRouter();
   const { t } = useI18n();
   const { session, members, games } = useFamily();
-  const { startGame, recentNames } = useGame();
+  const { startGame, recentNames, rulesFor } = useGame();
   const [name, setName] = useState('');
   const [mode, setMode] = useState<Mode>('up');
   const [targetText, setTargetText] = useState('');
@@ -50,14 +50,18 @@ export default function Setup() {
   const pickName = (n: string) => {
     setName(n);
     setError('');
-    const last = games.find((g) => g.gameKey === gameKeyFor(n));
-    if (!last) return;
-    setMode(last.mode);
-    if (last.mode === 'up') setTargetText(last.target != null ? String(last.target) : '');
-    else {
-      setStartText(String(last.start));
-      setGoalText(String(last.target ?? 0));
+    // What this phone used last time wins; otherwise what the family saved last.
+    const saved = games.find((g) => g.gameKey === gameKeyFor(n));
+    const r = rulesFor(n) ?? (saved ? { mode: saved.mode, start: saved.start, target: saved.target, dealer: false } : undefined);
+    if (!r) return;
+    setMode(r.mode);
+    if (r.mode === 'up') {
+      setTargetText(r.target != null ? String(r.target) : '');
+    } else {
+      setStartText(String(r.start));
+      setGoalText(String(r.target ?? 0));
     }
+    setDealer(r.dealer);
   };
 
   const toggle = (id: string) => {

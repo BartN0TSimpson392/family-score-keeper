@@ -12,7 +12,8 @@ export default function Stats() {
   const router = useRouter();
   const { t } = useI18n();
   const { session, games, members } = useFamily();
-  const [who, setWho] = useState<string | null>(null); // null = everyone
+  // 'me' = your own record, 'all' = the whole family's leaderboard, anything else = you against that person.
+  const [who, setWho] = useState<string>('me');
   const [gameKey, setGameKey] = useState<string | null>(null); // null = all games
 
   if (!session.signedIn) return <Redirect href="/welcome" />;
@@ -20,13 +21,14 @@ export default function Stats() {
 
   const me = members.find((m) => m.id === session.uid);
   const others = members.filter((m) => m.id !== session.uid);
-  const opponent = who ? members.find((m) => m.id === who) : undefined;
+  const opponent = who !== 'me' && who !== 'all' ? members.find((m) => m.id === who) : undefined;
+  const everyone = who === 'all';
   // One chip per game, using the most recent spelling of its name.
   const gameChips: [string, string][] = [];
   for (const g of games) if (!gameChips.some(([k]) => k === g.gameKey)) gameChips.push([g.gameKey, g.gameName]);
 
   const summary: Summary = opponent ? versus(games, session.uid, opponent.id, gameKey) : myRecord(games, session.uid, gameKey);
-  const board = opponent ? [] : leaderboard(games, gameKey);
+  const board = everyone ? leaderboard(games, gameKey) : [];
   const myScores = gameKey ? scoreStats(summary.games, session.uid) : null;
   const theirScores = gameKey && opponent ? scoreStats(summary.games, opponent.id) : null;
   const { tally, streak, last5 } = summary;
@@ -41,11 +43,12 @@ export default function Stats() {
 
         {games.length === 0 ? <Body>{t('noGamesYet')}</Body> : null}
 
-        {others.length > 0 ? (
+        {members.length > 0 ? (
           <View style={{ gap: 6 }}>
             <Text style={styles.label}>{t('statsWho')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-              <Chip label={t('everyone')} on={who === null} onPress={() => setWho(null)} />
+              <Chip label={t('everyone')} on={everyone} onPress={() => setWho('all')} />
+              <Chip label={t('youLabel')} on={who === 'me'} onPress={() => setWho('me')} />
               {others.map((m) => (
                 <Chip key={m.id} label={m.name} on={who === m.id} onPress={() => setWho(m.id)} />
               ))}
@@ -65,9 +68,9 @@ export default function Stats() {
           </View>
         ) : null}
 
-        {games.length > 0 && tally.played === 0 ? <Body>{opponent ? t('notTogetherYet') : t('noGamesYet')}</Body> : null}
+        {!everyone && games.length > 0 && tally.played === 0 ? <Body>{opponent ? t('notTogetherYet') : t('noGamesYet')}</Body> : null}
 
-        {tally.played > 0 ? (
+        {!everyone && tally.played > 0 ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{opponent ? t('vsHeader', { name: opponent.name }) : t('yourRecord')}</Text>
 
@@ -115,7 +118,7 @@ export default function Stats() {
           </View>
         ) : null}
 
-        {!opponent && board.length > 0 ? (
+        {everyone && board.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t('leaderboard')}</Text>
             {board.map((r, i) => (
