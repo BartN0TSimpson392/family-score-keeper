@@ -36,8 +36,8 @@ export type Mode = 'up' | 'down';
 
 export type LivePlayer = { uid: string; name: string; tint: string; photoUri?: string };
 
-/** One tap on a score button. The scores are always worked out from this list, so Undo is just removing the last one. */
-export type LiveEntry = { uid: string; delta: number; at: number };
+/** One round of play: how much each player's score changed. A player left out had no change. The scores are always worked out from the list of rounds, so Undo is just removing the last one. */
+export type Round = { points: Record<string, number>; at: number };
 
 export type LiveGame = {
   id: string;
@@ -51,7 +51,11 @@ export type LiveGame = {
   target: number | null;
   startedAt: number;
   players: LivePlayer[];
-  log: LiveEntry[];
+  /** True when the game tracks whose turn it is to deal (card games). */
+  dealer: boolean;
+  /** Who deals in round 1. The deal then moves to the next player in the list every round. */
+  firstDealerUid: string | null;
+  rounds: Round[];
 };
 
 /* ---------- A finished game, saved for the whole family ---------- */
@@ -72,6 +76,8 @@ export type SavedGame = {
   players: SavedPlayer[];
   /** Same people as `players`, as a plain list so the stats can ask "every game that includes this person". */
   playerUids: string[];
+  /** Round by round changes, like a score summary. Missing on games saved by older versions. */
+  rounds?: { points: Record<string, number> }[];
   /** Usually one person. Several when a game with no target ends in a tie. Empty when nobody won. */
   winnerUids: string[];
 };

@@ -216,6 +216,23 @@ const en = {
   resT: 'T',
   resN: '–',
   winsShort: '{n} wins',
+  addRound: 'Add round',
+  roundTitle: 'Round {n}',
+  roundHelpUp: 'Type each player\'s points for this round. Leave a box empty for no change. Use a minus sign to take points away.',
+  roundHelpDown: 'Type the points each player scored this round. They are taken off the score. Leave a box empty for none.',
+  dealsNow: 'Dealer: {name}',
+  dealerBadge: 'Dealer',
+  trackDealer: 'Track the dealer',
+  trackDealerSub: 'For card games. The deal moves to the next player every round.',
+  firstDealer: 'Who deals first?',
+  dealOrderHelp: 'After that the deal goes down the list of players, one per round.',
+  saveRound: 'Save round',
+  badPoints: 'Use whole numbers only, like 10 or -5.',
+  roundsH: 'Points by round',
+  roundShort: 'Rd',
+  totalLabel: 'Total',
+  startLabel: 'Start',
+  noRoundsYet: 'No rounds yet. Tap Add round after the first deal.',
 } as const;
 
 export type Dict = Record<keyof typeof en, string>;

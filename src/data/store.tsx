@@ -348,6 +348,7 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
       createdByUid: uid,
       players: g.players.map((p) => ({ uid: p.uid, name: p.name, tint: p.tint, score: scores[p.uid] ?? g.start })),
       playerUids: g.players.map((p) => p.uid),
+      rounds: g.rounds.map((r) => ({ points: r.points })),
       winnerUids: winnersOf(g),
     };
     await setDoc(ref, saved);

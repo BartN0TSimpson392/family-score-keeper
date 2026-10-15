@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { gameKeyFor, useGame } from '@/data/game';
 import { useFamily } from '@/data/store';
 import type { Mode } from '@/data/types';
@@ -22,6 +22,8 @@ export default function Setup() {
   const [startText, setStartText] = useState('');
   const [goalText, setGoalText] = useState('0');
   const [picked, setPicked] = useState<string[]>([session.uid]);
+  const [dealer, setDealer] = useState(false);
+  const [firstDealer, setFirstDealer] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   // You first, then everyone else in the usual order.
@@ -86,7 +88,8 @@ export default function Setup() {
       target = parseInt(rawGoal, 10);
     }
     const players = ordered.filter((m) => picked.includes(m.id)).map((m) => ({ uid: m.id, name: m.name, tint: m.tint, photoUri: m.photoUri }));
-    startGame({ name, mode, start, target, players });
+    const first = players.find((p) => p.uid === firstDealer)?.uid ?? players[0]?.uid ?? null;
+    startGame({ name, mode, start, target, players, dealer, firstDealerUid: dealer ? first : null });
     router.replace('/play');
   };
 
@@ -146,6 +149,32 @@ export default function Setup() {
               );
             })}
           </View>
+
+          <View style={styles.dealerBox}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.section}>🃏 {t('trackDealer')}</Text>
+                <Body style={{ fontSize: 17, lineHeight: 23 }}>{t('trackDealerSub')}</Body>
+              </View>
+              <Switch value={dealer} onValueChange={setDealer} accessibilityLabel={t('trackDealer')} trackColor={{ true: colors.teal }} />
+            </View>
+            {dealer ? (
+              <View style={{ gap: 8 }}>
+                <Text style={styles.small}>{t('firstDealer')}</Text>
+                <View style={styles.chips}>
+                  {ordered.filter((m) => picked.includes(m.id)).map((m) => {
+                    const on = (firstDealer && picked.includes(firstDealer) ? firstDealer : ordered.find((o) => picked.includes(o.id))?.id) === m.id;
+                    return (
+                      <Pressable key={m.id} onPress={() => setFirstDealer(m.id)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={[styles.chip, on && { backgroundColor: colors.teal }]}>
+                        <Text style={[styles.chipText, on && { color: colors.cream }]}>{m.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Body style={{ fontSize: 16, lineHeight: 22 }}>{t('dealOrderHelp')}</Body>
+              </View>
+            ) : null}
+          </View>
           {error ? <ErrorText>{error}</ErrorText> : null}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -165,6 +194,7 @@ function ModeButton({ label, sub, active, onPress }: { label: string; sub: strin
 const styles = StyleSheet.create({
   small: { fontWeight: '700', fontSize: 16, color: colors.muted },
   section: { fontWeight: '800', fontSize: 22, color: colors.ink },
+  dealerBox: { gap: 12, padding: 14, borderRadius: 16, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.border },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, borderWidth: 2, borderColor: colors.teal, justifyContent: 'center' },
   chipText: { fontWeight: '700', fontSize: 18, color: colors.teal },

@@ -2,42 +2,56 @@ import * as Haptics from 'expo-haptics';
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { standings, useGame } from '@/data/game';
+import { dealerFor, standings, useGame } from '@/data/game';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
-import { Avatar, BigButton, SmallButton } from '@/ui/components';
+import { Avatar, BigButton, ErrorText, SmallButton } from '@/ui/components';
+import { RoundsTable } from '@/ui/RoundsTable';
 import { colors } from '@/ui/theme';
 import { targetLine } from '@/ui/targetLine';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const sign = (n: number) => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);
+const sign = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
 
 export default function Play() {
   const router = useRouter();
   const { t } = useI18n();
-  const { game, addPoints, undo, endGame } = useGame();
+  const { game, addRound, undo, endGame } = useGame();
   const { saveGame } = useFamily();
   const [saving, setSaving] = useState(false);
-  const [customFor, setCustomFor] = useState<string | null>(null);
-  const [customText, setCustomText] = useState('');
+  const [entering, setEntering] = useState(false);
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const [entryError, setEntryError] = useState('');
   if (!game) return <Redirect href="/home" />;
 
-  const { scores, winnerUid, leaders } = standings(game);
-  const winner = game.players.find((p) => p.uid === winnerUid);
-  // Count up: the big buttons add. Count down: the big buttons subtract. The small one on the left fixes a slip.
-  const steps = game.mode === 'up' ? [1, 5, 10] : [-1, -5, -10];
-  const fix = game.mode === 'up' ? -1 : 1;
+  const { scores, winnerUids, leaders } = standings(game);
+  const winners = game.players.filter((p) => winnerUids.includes(p.uid));
+  const roundNo = game.rounds.length + 1;
+  const dealerUid = dealerFor(game, game.rounds.length);
+  const dealerName = game.players.find((p) => p.uid === dealerUid)?.name;
+  const lastRound = game.rounds[game.rounds.length - 1];
+  const dealers = game.dealer ? game.rounds.map((_, i) => dealerFor(game, i)) : undefined;
 
-  const tap = (uid: string, delta: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    addPoints(uid, delta);
+  const openEntry = () => {
+    setTexts({});
+    setEntryError('');
+    setEntering(true);
   };
 
-  const applyCustom = (direction: 1 | -1) => {
-    const amount = parseInt(customText, 10);
-    if (customFor && Number.isFinite(amount) && amount > 0) tap(customFor, direction * amount);
-    setCustomFor(null);
-    setCustomText('');
+  const saveRound = () => {
+    const points: Record<string, number> = {};
+    for (const p of game.players) {
+      const raw = (texts[p.uid] ?? '').trim().replace('−', '-');
+      if (raw === '') continue;
+      if (!/^-?\d{1,6}$/.test(raw)) return setEntryError(t('badPoints'));
+      const v = parseInt(raw, 10);
+      // Counting down, you type the points someone scored and they come off the score.
+      const delta = game.mode === 'down' ? -v : v;
+      if (delta !== 0) points[p.uid] = delta;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    addRound(points);
+    setEntering(false);
   };
 
   const saveAndLeave = async () => {
@@ -61,7 +75,7 @@ export default function Play() {
   };
 
   const confirmEnd = () => {
-    if (game.log.length === 0) {
+    if (game.rounds.length === 0) {
       Alert.alert(t('endGameH'), t('noPointsYet'), [
         { text: t('cancel'), style: 'cancel' },
         { text: t('discardGame'), style: 'destructive', onPress: discard },
@@ -89,75 +103,91 @@ export default function Play() {
       </View>
 
       <ScrollView contentContainerStyle={{ gap: 12, padding: 16, paddingBottom: 8 }}>
-        {winner ? (
+        {winners.length > 0 ? (
           <View style={styles.winner} accessibilityRole="alert">
-            <Text style={styles.winnerText}>🏆 {t('winnerBanner', { name: winner.name })}</Text>
+            <Text style={styles.winnerText}>🏆 {t('winnerBanner', { name: winners.map((w) => w.name).join(' & ') })}</Text>
             <Text style={styles.winnerSub}>{t('keepPlaying')}</Text>
           </View>
         ) : null}
 
+        <View style={styles.roundBar}>
+          <Text style={styles.roundTitle}>{t('roundTitle', { n: roundNo })}</Text>
+          {dealerName ? <Text style={styles.dealerText}>🃏 {t('dealsNow', { name: dealerName })}</Text> : null}
+        </View>
+
         {game.players.map((p) => {
           const isLeader = leaders.includes(p.uid);
+          const isWinner = winnerUids.includes(p.uid);
+          const change = lastRound ? lastRound.points[p.uid] ?? 0 : null;
           return (
-            <View key={p.uid} style={[styles.card, isLeader && styles.cardLead, p.uid === winnerUid && styles.cardWin]}>
+            <View key={p.uid} style={[styles.card, isLeader && styles.cardLead, isWinner && styles.cardWin]}>
               <View style={styles.cardTop}>
                 <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={52} />
-                <Text style={styles.playerName} numberOfLines={1}>{p.uid === winnerUid ? '🏆 ' : isLeader ? '👑 ' : ''}{p.name}</Text>
-                <Text style={styles.score} adjustsFontSizeToFit numberOfLines={1} accessibilityLabel={`${p.name}: ${scores[p.uid]}`}>{scores[p.uid]}</Text>
-              </View>
-              <View style={styles.row}>
-                <PointButton label={sign(fix)} small onPress={() => tap(p.uid, fix)} />
-                {steps.map((s) => (
-                  <PointButton key={s} label={sign(s)} onPress={() => tap(p.uid, s)} />
-                ))}
-                <PointButton label="…" small onPress={() => { setCustomFor(p.uid); setCustomText(''); }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.playerName} numberOfLines={1}>{isWinner ? '🏆 ' : isLeader ? '👑 ' : ''}{p.name}</Text>
+                  {p.uid === dealerUid ? <Text style={styles.badge}>🃏 {t('dealerBadge')}</Text> : null}
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.score} adjustsFontSizeToFit numberOfLines={1} accessibilityLabel={`${p.name}: ${scores[p.uid]}`}>{scores[p.uid]}</Text>
+                  {change !== null ? <Text style={styles.change}>{sign(change)}</Text> : null}
+                </View>
               </View>
             </View>
           );
         })}
+
+        {game.rounds.length > 0 ? (
+          <View style={{ gap: 8, marginTop: 4 }}>
+            <Text style={styles.sectionLabel}>{t('roundsH')}</Text>
+            <RoundsTable players={game.players} rounds={game.rounds} totals={scores} start={game.start} dealers={dealers} />
+          </View>
+        ) : (
+          <Text style={styles.empty}>{t('noRoundsYet')}</Text>
+        )}
       </ScrollView>
 
       <View style={styles.bottom}>
-        <SmallButton label={t('undo')} style={{ flex: 1, minHeight: 60, opacity: game.log.length ? 1 : 0.4 }} onPress={() => game.log.length && undo()} />
-        <BigButton label={saving ? t('working') : t('endGame')} tone="outline" height={60} disabled={saving} style={{ flex: 1 }} onPress={confirmEnd} />
+        <BigButton label={t('addRound')} height={64} onPress={openEntry} />
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <SmallButton label={t('undo')} style={{ flex: 1, minHeight: 56, opacity: game.rounds.length ? 1 : 0.4 }} onPress={() => game.rounds.length && undo()} />
+          <BigButton label={saving ? t('working') : t('endGame')} tone="outline" height={56} disabled={saving} style={{ flex: 1 }} onPress={confirmEnd} />
+        </View>
       </View>
 
-      <Modal visible={customFor !== null} transparent animationType="fade" onRequestClose={() => setCustomFor(null)}>
+      <Modal visible={entering} transparent animationType="fade" onRequestClose={() => setEntering(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalBack}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('customAmount')}</Text>
-            <TextInput
-              value={customText}
-              onChangeText={(v) => setCustomText(v.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              placeholder={t('amountPlaceholder')}
-              placeholderTextColor={colors.soft}
-              autoFocus
-              style={styles.modalInput}
-              accessibilityLabel={t('customAmount')}
-            />
+            <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
+            {dealerName ? <Text style={styles.dealerText}>🃏 {t('dealsNow', { name: dealerName })}</Text> : null}
+            <Text style={styles.help}>{game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
+              {game.players.map((p, i) => (
+                <View key={p.uid} style={styles.entryRow}>
+                  <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={44} />
+                  <Text style={styles.entryName} numberOfLines={1}>{p.name}</Text>
+                  <TextInput
+                    value={texts[p.uid] ?? ''}
+                    onChangeText={(v) => { setTexts((prev) => ({ ...prev, [p.uid]: v.replace(/[^0-9\-−]/g, '') })); setEntryError(''); }}
+                    keyboardType="numbers-and-punctuation"
+                    placeholder="0"
+                    placeholderTextColor={colors.soft}
+                    autoFocus={i === 0}
+                    selectTextOnFocus
+                    style={styles.entryInput}
+                    accessibilityLabel={p.name}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            {entryError ? <ErrorText>{entryError}</ErrorText> : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <SmallButton label={`− ${t('subtractBtn')}`} style={{ flex: 1, minHeight: 60 }} onPress={() => applyCustom(-1)} />
-              <SmallButton label={`+ ${t('addBtn')}`} tone="primary" style={{ flex: 1, minHeight: 60 }} onPress={() => applyCustom(1)} />
+              <SmallButton label={t('cancel')} style={{ flex: 1, minHeight: 60, borderColor: colors.inputBorder }} onPress={() => setEntering(false)} />
+              <SmallButton label={t('saveRound')} tone="primary" style={{ flex: 1.4, minHeight: 60 }} onPress={saveRound} />
             </View>
-            <SmallButton label={t('cancel')} style={{ minHeight: 52, borderColor: colors.inputBorder }} onPress={() => setCustomFor(null)} />
           </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
-  );
-}
-
-function PointButton({ label, onPress, small }: { label: string; onPress: () => void; small?: boolean }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [styles.pt, small ? styles.ptSmall : styles.ptBig, pressed && { opacity: 0.6 }]}
-    >
-      <Text style={[styles.ptText, small && { color: colors.teal }]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -177,14 +207,20 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   playerName: { flex: 1, fontWeight: '700', fontSize: 23, color: colors.ink },
   score: { minWidth: 96, textAlign: 'right', fontWeight: '800', fontSize: 52, lineHeight: 60, color: colors.ink },
-  row: { flexDirection: 'row', gap: 8 },
-  pt: { height: 60, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  ptBig: { flex: 2, backgroundColor: colors.primary },
-  ptSmall: { flex: 1.2, borderWidth: 2, borderColor: colors.teal, backgroundColor: 'transparent' },
-  ptText: { fontWeight: '800', fontSize: 24, color: colors.cream },
-  bottom: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  modalBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start', paddingTop: 90, paddingHorizontal: 20 },
-  modalCard: { gap: 14, padding: 18, borderRadius: 20, backgroundColor: colors.paper },
+  roundBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' },
+  roundTitle: { fontWeight: '800', fontSize: 24, color: colors.ink },
+  dealerText: { fontWeight: '700', fontSize: 20, color: colors.primary },
+  badge: { fontWeight: '700', fontSize: 16, color: colors.primary },
+  change: { fontWeight: '700', fontSize: 20, color: colors.muted },
+  sectionLabel: { fontWeight: '700', fontSize: 16, letterSpacing: 1.3, textTransform: 'uppercase', color: colors.teal },
+  empty: { fontSize: 18, color: colors.muted, textAlign: 'center', paddingVertical: 8 },
+  help: { fontSize: 17, lineHeight: 23, color: colors.muted },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  entryName: { flex: 1, fontWeight: '700', fontSize: 21, color: colors.ink },
+  entryInput: { width: 130, height: 60, borderWidth: 2, borderColor: colors.inputBorder, borderRadius: 14, backgroundColor: colors.input, paddingHorizontal: 12, fontSize: 28, fontWeight: '700', textAlign: 'center', color: colors.ink },
+  bottom: { gap: 10, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  modalBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start', paddingTop: 50, paddingHorizontal: 16 },
+  modalCard: { maxHeight: '92%', gap: 12, padding: 18, borderRadius: 20, backgroundColor: colors.paper },
   modalTitle: { fontWeight: '800', fontSize: 24, color: colors.ink },
   modalInput: { height: 68, borderWidth: 2, borderColor: colors.inputBorder, borderRadius: 16, backgroundColor: colors.input, paddingHorizontal: 18, fontSize: 30, fontWeight: '700', color: colors.ink },
 });

@@ -208,6 +208,23 @@ const pl: Record<string, string> = {
   resT: 'R',
   resN: '–',
   winsShort: 'wygrane: {n}',
+  addRound: 'Dodaj rundę',
+  roundTitle: 'Runda {n}',
+  roundHelpUp: 'Wpisz punkty każdego gracza w tej rundzie. Puste pole oznacza brak zmian. Znak minus odejmuje punkty.',
+  roundHelpDown: 'Wpisz punkty zdobyte przez każdego gracza w tej rundzie. Zostaną odjęte od wyniku. Puste pole oznacza zero.',
+  dealsNow: 'Rozdaje: {name}',
+  dealerBadge: 'Rozdający',
+  trackDealer: 'Pilnuj rozdającego',
+  trackDealerSub: 'Do gier karcianych. Rozdawanie przechodzi na kolejnego gracza co rundę.',
+  firstDealer: 'Kto rozdaje pierwszy?',
+  dealOrderHelp: 'Potem rozdawanie idzie po kolei według listy graczy, jedna osoba na rundę.',
+  saveRound: 'Zapisz rundę',
+  badPoints: 'Wpisz liczbę całkowitą, np. 10 lub -5.',
+  roundsH: 'Punkty w rundach',
+  roundShort: 'Rd',
+  totalLabel: 'Razem',
+  startLabel: 'Start',
+  noRoundsYet: 'Jeszcze nie ma rund. Po pierwszym rozdaniu naciśnij Dodaj rundę.',
 };
 
 export default pl as unknown as Dict;

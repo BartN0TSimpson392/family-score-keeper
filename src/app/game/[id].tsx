@@ -5,6 +5,7 @@ import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, Body, ErrorText, H1, Screen, SmallButton, TopBar } from '@/ui/components';
 import { formatDate, rulesLine } from '@/ui/format';
+import { RoundsTable } from '@/ui/RoundsTable';
 import { colors } from '@/ui/theme';
 
 /** One saved game: final scores, who won, and (for the person who saved it, or an admin) a way to delete it. */
@@ -76,6 +77,18 @@ export default function GameDetails() {
             );
           })}
         </View>
+
+        {g.rounds && g.rounds.length > 0 ? (
+          <View style={{ gap: 8 }}>
+            <Text style={styles.label}>{t('roundsH')}</Text>
+            <RoundsTable
+              players={g.players}
+              rounds={g.rounds}
+              totals={Object.fromEntries(g.players.map((p) => [p.uid, p.score]))}
+              start={g.start}
+            />
+          </View>
+        ) : null}
 
         {savedBy ? <Body style={{ fontSize: 16 }}>{t('savedBy', { name: savedBy })}</Body> : null}
         {failed ? <ErrorText>{t('deleteFailed')}</ErrorText> : null}
