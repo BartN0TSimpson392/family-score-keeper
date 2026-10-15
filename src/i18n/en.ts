@@ -233,6 +233,12 @@ const en = {
   totalLabel: 'Total',
   startLabel: 'Start',
   noRoundsYet: 'No rounds yet. Tap Add round after the first deal.',
+  targetPenalty: 'Reach {n} and you lose',
+  penaltyGame: 'Penalty game',
+  penaltyGameSub: 'Points are bad. The first to reach the target loses, and the lowest score wins.',
+  targetHelpPenalty: 'Whoever reaches this score first loses. The player with the lowest score at that moment wins.',
+  needTargetPenalty: 'A penalty game needs a target score, like 300.',
+  penaltyLoser: '{name} reached the target and loses.',
 } as const;
 
 export type Dict = Record<keyof typeof en, string>;

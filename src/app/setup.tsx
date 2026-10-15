@@ -22,6 +22,7 @@ export default function Setup() {
   const [startText, setStartText] = useState('');
   const [goalText, setGoalText] = useState('0');
   const [picked, setPicked] = useState<string[]>([session.uid]);
+  const [penalty, setPenalty] = useState(false);
   const [dealer, setDealer] = useState(false);
   const [firstDealer, setFirstDealer] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -52,7 +53,7 @@ export default function Setup() {
     setError('');
     // What this phone used last time wins; otherwise what the family saved last.
     const saved = games.find((g) => g.gameKey === gameKeyFor(n));
-    const r = rulesFor(n) ?? (saved ? { mode: saved.mode, start: saved.start, target: saved.target, dealer: false } : undefined);
+    const r = rulesFor(n) ?? (saved ? { mode: saved.mode, start: saved.start, target: saved.target, dealer: false, penalty: !!saved.penalty } : undefined);
     if (!r) return;
     setMode(r.mode);
     if (r.mode === 'up') {
@@ -62,6 +63,7 @@ export default function Setup() {
       setGoalText(String(r.target ?? 0));
     }
     setDealer(r.dealer);
+    setPenalty(!!r.penalty);
   };
 
   const toggle = (id: string) => {
@@ -81,6 +83,8 @@ export default function Setup() {
       if (raw !== '') {
         if (!/^\d{1,6}$/.test(raw) || parseInt(raw, 10) <= 0) return setError(t('badTarget'));
         target = parseInt(raw, 10);
+      } else if (penalty) {
+        return setError(t('needTargetPenalty'));
       }
     } else {
       const rawStart = startText.trim();
@@ -93,7 +97,7 @@ export default function Setup() {
     }
     const players = ordered.filter((m) => picked.includes(m.id)).map((m) => ({ uid: m.id, name: m.name, tint: m.tint, photoUri: m.photoUri }));
     const first = players.find((p) => p.uid === firstDealer)?.uid ?? players[0]?.uid ?? null;
-    startGame({ name, mode, start, target, players, dealer, firstDealerUid: dealer ? first : null });
+    startGame({ name, mode, start, target, players, dealer, firstDealerUid: dealer ? first : null, penalty: mode === 'up' && penalty });
     router.replace('/play');
   };
 
@@ -135,7 +139,18 @@ export default function Setup() {
               </View>
             </View>
           )}
-          <Body style={{ fontSize: 17, lineHeight: 23 }}>{mode === 'up' ? t('targetHelpUp') : t('targetHelpDown')}</Body>
+          <Body style={{ fontSize: 17, lineHeight: 23 }}>{mode === 'up' ? (penalty ? t('targetHelpPenalty') : t('targetHelpUp')) : t('targetHelpDown')}</Body>
+          {mode === 'up' ? (
+            <View style={styles.dealerBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.section}>{t('penaltyGame')}</Text>
+                  <Body style={{ fontSize: 17, lineHeight: 23 }}>{t('penaltyGameSub')}</Body>
+                </View>
+                <Switch value={penalty} onValueChange={setPenalty} accessibilityLabel={t('penaltyGame')} trackColor={{ true: colors.teal }} />
+              </View>
+            </View>
+          ) : null}
 
           <View style={{ gap: 4 }}>
             <Text style={styles.section}>{t('playersH')}</Text>

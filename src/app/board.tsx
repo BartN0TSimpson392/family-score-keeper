@@ -33,7 +33,7 @@ export default function Board() {
 
   if (!game) return <Redirect href="/home" />;
 
-  const { scores, winnerUids, leaders } = standings(game);
+  const { scores, winnerUids, loserUids, leaders } = standings(game);
   const dealerUid = dealerFor(game, game.rounds.length);
   const lastRound = game.rounds[game.rounds.length - 1];
   const n = game.players.length;
@@ -64,7 +64,7 @@ export default function Board() {
                   <View style={styles.who}>
                     <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={Math.min(64, Math.max(32, cardH * 0.2))} />
                     <Text style={[styles.name, { fontSize: Math.min(34, Math.max(18, cardH * 0.11)) }]} numberOfLines={1}>
-                      {isWin ? '🏆 ' : isLead ? '👑 ' : ''}{p.name}
+                      {isWin ? '🏆 ' : loserUids.includes(p.uid) ? '💥 ' : isLead ? '👑 ' : ''}{p.name}
                     </Text>
                   </View>
                   {p.uid === dealerUid || lastRound ? (

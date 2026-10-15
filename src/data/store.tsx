@@ -343,6 +343,7 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
       mode: g.mode,
       start: g.start,
       target: g.target,
+      penalty: !!g.penalty,
       startedAt: g.startedAt,
       endedAt: Date.now(),
       createdByUid: uid,

@@ -225,6 +225,12 @@ const pl: Record<string, string> = {
   totalLabel: 'Razem',
   startLabel: 'Start',
   noRoundsYet: 'Jeszcze nie ma rund. Po pierwszym rozdaniu naciśnij Dodaj rundę.',
+  targetPenalty: 'Kto dojdzie do {n}, przegrywa',
+  penaltyGame: 'Gra karna',
+  penaltyGameSub: 'Punkty są złe. Kto pierwszy osiągnie cel, przegrywa, a wygrywa najniższy wynik.',
+  targetHelpPenalty: 'Kto pierwszy osiągnie ten wynik, przegrywa. Wygrywa gracz z najniższym wynikiem w tym momencie.',
+  needTargetPenalty: 'Gra karna wymaga wyniku docelowego, np. 300.',
+  penaltyLoser: '{name} osiągnął cel i przegrywa.',
 };
 
 export default pl as unknown as Dict;

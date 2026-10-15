@@ -31,7 +31,7 @@ export default function GameDetails() {
   const canDelete = session.isAdmin || g.createdByUid === session.uid;
   const savedBy = members.find((m) => m.id === g.createdByUid)?.name;
   const photoOf = (uid: string) => members.find((m) => m.id === uid)?.photoUri;
-  const sorted = [...g.players].sort((a, b) => (g.mode === 'up' ? b.score - a.score : a.score - b.score));
+  const sorted = [...g.players].sort((a, b) => (g.mode === 'up' && !g.penalty ? b.score - a.score : a.score - b.score));
 
   const confirmDelete = () =>
     Alert.alert(t('deleteGameH'), t('deleteGameSure'), [

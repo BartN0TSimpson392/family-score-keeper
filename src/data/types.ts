@@ -51,6 +51,8 @@ export type LiveGame = {
   target: number | null;
   startedAt: number;
   players: LivePlayer[];
+  /** Penalty game (count up only): reaching the target LOSES, and the lowest score wins. */
+  penalty?: boolean;
   /** True when the game tracks whose turn it is to deal (card games). */
   dealer: boolean;
   /** Who deals in round 1. The deal then moves to the next player in the list every round. */
@@ -76,6 +78,8 @@ export type SavedGame = {
   players: SavedPlayer[];
   /** Same people as `players`, as a plain list so the stats can ask "every game that includes this person". */
   playerUids: string[];
+  /** Penalty game: whoever reached the target lost and the lowest score won. */
+  penalty?: boolean;
   /** Round by round changes, like a score summary. Missing on games saved by older versions. */
   rounds?: { points: Record<string, number> }[];
   /** Usually one person. Several when a game with no target ends in a tie. Empty when nobody won. */

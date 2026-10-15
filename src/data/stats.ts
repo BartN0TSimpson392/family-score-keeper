@@ -78,11 +78,11 @@ export function scoreStats(games: SavedGame[], uid: string): ScoreStats | null {
     if (p) scores.push(p.score);
   }
   if (scores.length === 0) return null;
-  const mode: Mode = games[0]?.mode ?? 'up';
+  const lowIsBest = (games[0]?.mode ?? 'up') === 'down' || !!games[0]?.penalty;
   const sum = scores.reduce((a, b) => a + b, 0);
   return {
     average: Math.round((sum / scores.length) * 10) / 10,
-    best: mode === 'up' ? Math.max(...scores) : Math.min(...scores),
+    best: lowIsBest ? Math.min(...scores) : Math.max(...scores),
     games: scores.length,
   };
 }

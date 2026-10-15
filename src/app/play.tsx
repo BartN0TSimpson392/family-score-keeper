@@ -24,7 +24,8 @@ export default function Play() {
   const [entryError, setEntryError] = useState('');
   if (!game) return <Redirect href="/home" />;
 
-  const { scores, winnerUids, leaders } = standings(game);
+  const { scores, winnerUids, loserUids, leaders } = standings(game);
+  const losers = game.players.filter((p) => loserUids.includes(p.uid));
   const winners = game.players.filter((p) => winnerUids.includes(p.uid));
   const roundNo = game.rounds.length + 1;
   const dealerUid = dealerFor(game, game.rounds.length);
@@ -105,7 +106,7 @@ export default function Play() {
         {winners.length > 0 ? (
           <View style={styles.winner} accessibilityRole="alert">
             <Text style={styles.winnerText}>🏆 {t('winnerBanner', { name: winners.map((w) => w.name).join(' & ') })}</Text>
-            <Text style={styles.winnerSub}>{t('keepPlaying')}</Text>
+            <Text style={styles.winnerSub}>{losers.length > 0 ? t('penaltyLoser', { name: losers.map((l) => l.name).join(' & ') }) : t('keepPlaying')}</Text>
           </View>
         ) : null}
 
@@ -117,13 +118,14 @@ export default function Play() {
         {game.players.map((p) => {
           const isLeader = leaders.includes(p.uid);
           const isWinner = winnerUids.includes(p.uid);
+          const isLoser = loserUids.includes(p.uid);
           const change = lastRound ? lastRound.points[p.uid] ?? 0 : null;
           return (
             <View key={p.uid} style={[styles.card, isLeader && styles.cardLead, isWinner && styles.cardWin]}>
               <View style={styles.cardTop}>
                 <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={52} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.playerName} numberOfLines={1}>{isWinner ? '🏆 ' : isLeader ? '👑 ' : ''}{p.name}</Text>
+                  <Text style={styles.playerName} numberOfLines={1}>{isWinner ? '🏆 ' : isLoser ? '💥 ' : isLeader ? '👑 ' : ''}{p.name}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.score} adjustsFontSizeToFit numberOfLines={1} accessibilityLabel={`${p.name}: ${scores[p.uid]}`}>{scores[p.uid]}</Text>
