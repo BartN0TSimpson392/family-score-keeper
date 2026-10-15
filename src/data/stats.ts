@@ -1,4 +1,4 @@
-import type { Mode, SavedGame } from './types';
+import type { SavedGame, SavedPlayer } from './types';
 
 /*
  * All stats are worked out on the phone from the saved games, so there is nothing extra to keep in sync.
@@ -30,15 +30,27 @@ export function filterGames(games: SavedGame[], gameKey: string | null): SavedGa
   return newestFirst(gameKey ? games.filter((g) => g.gameKey === gameKey) : games);
 }
 
+/** The side a person played on: themselves, or their team. Games saved before teams existed always have one side per person. */
+export function sideOf(g: SavedGame, uid: string): SavedPlayer | undefined {
+  return g.players.find((p) => p.uid === uid || p.memberUids?.includes(uid));
+}
+
+/** Every person in the game, team members included. */
+export function peopleOf(g: SavedGame): { uid: string; name: string; tint: string }[] {
+  return g.players.flatMap((p) => (p.members && p.members.length > 0 ? p.members : [{ uid: p.uid, name: p.name, tint: p.tint }]));
+}
+
 export function resultSolo(g: SavedGame, me: string): Result {
+  const side = sideOf(g, me);
+  if (!side) return 'none';
   const w = g.winnerUids;
-  if (w.includes(me)) return w.length > 1 ? 'tie' : 'win';
+  if (w.includes(side.uid)) return w.length > 1 ? 'tie' : 'win';
   return w.length === 0 ? 'none' : 'loss';
 }
 
 export function resultVs(g: SavedGame, me: string, other: string): Result {
-  const meWon = g.winnerUids.includes(me);
-  const otherWon = g.winnerUids.includes(other);
+  const meWon = g.winnerUids.includes(sideOf(g, me)?.uid ?? '');
+  const otherWon = g.winnerUids.includes(sideOf(g, other)?.uid ?? '');
   if (meWon && otherWon) return 'tie';
   if (meWon) return 'win';
   if (otherWon) return 'loss';
@@ -74,7 +86,7 @@ export function streakOf(results: Result[]): Streak | null {
 export function scoreStats(games: SavedGame[], uid: string): ScoreStats | null {
   const scores: number[] = [];
   for (const g of games) {
-    const p = g.players.find((x) => x.uid === uid);
+    const p = sideOf(g, uid);
     if (p) scores.push(p.score);
   }
   if (scores.length === 0) return null;
@@ -100,10 +112,23 @@ function summarize(games: SavedGame[], results: Result[]): Summary {
   return { games, results, tally: tally(results), streak: streakOf(results), last5: results.slice(0, 5) };
 }
 
-/** You against one other person, using only the games you were both in. */
+/** You against one other person, using only the games where you were on opposite sides. */
 export function versus(allGames: SavedGame[], me: string, other: string, gameKey: string | null): Summary {
-  const games = filterGames(allGames, gameKey).filter((g) => g.playerUids.includes(me) && g.playerUids.includes(other));
+  const games = filterGames(allGames, gameKey).filter((g) => {
+    const a = sideOf(g, me);
+    const b = sideOf(g, other);
+    return !!a && !!b && a.uid !== b.uid;
+  });
   return summarize(games, games.map((g) => resultVs(g, me, other)));
+}
+
+/** Team games where you and another person were on the same team. A win is a win for both of you. */
+export function partners(allGames: SavedGame[], me: string, partner: string, gameKey: string | null): Summary {
+  const games = filterGames(allGames, gameKey).filter((g) => {
+    const a = sideOf(g, me);
+    return !!a && a === sideOf(g, partner) && (a.memberUids?.length ?? 0) > 1;
+  });
+  return summarize(games, games.map((g) => resultSolo(g, me)));
 }
 
 /** Your own record in the games you played. */
@@ -119,7 +144,7 @@ export function leaderboard(allGames: SavedGame[], gameKey: string | null): Lead
   const games = filterGames(allGames, gameKey);
   const people = new Map<string, { name: string; tint: string; results: Result[] }>();
   for (const g of games) {
-    for (const p of g.players) {
+    for (const p of peopleOf(g)) {
       // Newest first, so the first time we see someone is their latest name.
       const row = people.get(p.uid) ?? { name: p.name, tint: p.tint, results: [] };
       row.results.push(resultSolo(g, p.uid));

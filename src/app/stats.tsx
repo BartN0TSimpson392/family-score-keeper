@@ -2,7 +2,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFamily } from '@/data/store';
-import { leaderboard, myRecord, scoreStats, versus, type Result, type Summary } from '@/data/stats';
+import { leaderboard, myRecord, partners, scoreStats, versus, type Result, type Summary } from '@/data/stats';
 import { useI18n } from '@/i18n';
 import { Avatar, Body, H1, Screen, TopBar } from '@/ui/components';
 import { colors } from '@/ui/theme';
@@ -32,6 +32,7 @@ export default function Stats() {
   const myScores = gameKey ? scoreStats(summary.games, session.uid) : null;
   const theirScores = gameKey && opponent ? scoreStats(summary.games, opponent.id) : null;
   const { tally, streak, last5 } = summary;
+  const together = opponent ? partners(games, session.uid, opponent.id, gameKey).tally : null;
   const photoOf = (uid: string) => members.find((m) => m.id === uid)?.photoUri;
   const dash = '–';
 
@@ -115,6 +116,18 @@ export default function Stats() {
                 <ScoreRow label={t('bestScore')} mine={String(myScores.best)} theirs={theirScores ? String(theirScores.best) : undefined} />
               </View>
             ) : null}
+          </View>
+        ) : null}
+
+        {opponent && together && together.played > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{t('partnersTitle', { name: opponent.name })}</Text>
+            <View style={styles.tiles}>
+              <Tile label={t('gamesPlayed')} value={String(together.played)} />
+              <Tile label={t('winsLabel')} value={String(together.wins)} />
+              <Tile label={t('lossesLabel')} value={String(together.losses)} />
+              <Tile label={t('winRate')} value={together.winRate == null ? dash : `${together.winRate}%`} />
+            </View>
           </View>
         ) : null}
 

@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
-import { Avatar, Body, ErrorText, H1, Screen, SmallButton, TopBar } from '@/ui/components';
+import { Body, ErrorText, H1, Screen, SmallButton, TopBar } from '@/ui/components';
+import { SideAvatar } from '@/ui/SideAvatar';
 import { formatDate, rulesLine } from '@/ui/format';
 import { RoundsTable } from '@/ui/RoundsTable';
 import { colors } from '@/ui/theme';
@@ -70,7 +71,7 @@ export default function GameDetails() {
             const won = g.winnerUids.includes(p.uid);
             return (
               <View key={p.uid} style={[styles.row, won && styles.rowWon]}>
-                <Avatar name={p.name} tint={p.tint} photoUri={photoOf(p.uid)} size={56} />
+                <SideAvatar name={p.name} tint={p.tint} photoUri={photoOf(p.uid)} members={p.members} photoOf={photoOf} size={56} />
                 <Text style={styles.name} numberOfLines={1}>{won ? '🏆 ' : ''}{p.name}</Text>
                 <Text style={styles.score}>{p.score}</Text>
               </View>

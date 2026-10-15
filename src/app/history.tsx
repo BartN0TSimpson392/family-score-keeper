@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
-import { Avatar, Body, H1, Screen, TopBar } from '@/ui/components';
+import { Body, H1, Screen, TopBar } from '@/ui/components';
+import { SideAvatar } from '@/ui/SideAvatar';
 import { formatDate, rulesLine } from '@/ui/format';
 import { colors } from '@/ui/theme';
 
@@ -59,7 +60,7 @@ export default function History() {
             <View style={{ gap: 6 }}>
               {g.players.map((p) => (
                 <View key={p.uid} style={styles.playerRow}>
-                  <Avatar name={p.name} tint={p.tint} photoUri={photoOf(p.uid)} size={36} />
+                  <SideAvatar name={p.name} tint={p.tint} photoUri={photoOf(p.uid)} members={p.members} photoOf={photoOf} size={36} />
                   <Text style={[styles.pName, g.winnerUids.includes(p.uid) && { color: colors.ink }]} numberOfLines={1}>
                     {g.winnerUids.includes(p.uid) ? '🏆 ' : ''}{p.name}
                   </Text>

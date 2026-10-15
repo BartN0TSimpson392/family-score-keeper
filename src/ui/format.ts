@@ -11,8 +11,9 @@ export function formatDate(ms: number, lang: Lang): string {
 }
 
 /** How a saved game was played, e.g. "First to 21" or "From 501 down to 0". */
-export function rulesLine(g: Pick<SavedGame, 'mode' | 'start' | 'target' | 'penalty'>, t: (key: Key, params?: Record<string, string | number>) => string): string {
+export function rulesLine(g: Pick<SavedGame, 'mode' | 'start' | 'target' | 'penalty' | 'winBy'>, t: (key: Key, params?: Record<string, string | number>) => string): string {
   if (g.target == null) return t('noTargetUp');
   if (g.penalty && g.mode === 'up') return t('targetPenalty', { n: g.target });
-  return g.mode === 'up' ? t('targetUp', { n: g.target }) : t('targetDown', { start: g.start, n: g.target });
+  if (g.mode === 'up') return t('targetUp', { n: g.target }) + ((g.winBy ?? 1) > 1 ? t('winByN', { n: g.winBy ?? 2 }) : '');
+  return t('targetDown', { start: g.start, n: g.target });
 }

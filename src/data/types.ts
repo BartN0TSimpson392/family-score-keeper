@@ -34,7 +34,10 @@ export type Session = {
 /** "up": add points until you reach the target. "down": start at the target and subtract until you reach zero. */
 export type Mode = 'up' | 'down';
 
-export type LivePlayer = { uid: string; name: string; tint: string; photoUri?: string };
+export type LiveMember = { uid: string; name: string; tint: string; photoUri?: string };
+
+/** One side in a game. Usually one person. In a team game it is a whole team: `uid` is then a made-up id for the team and `members` lists the people on it. */
+export type LivePlayer = { uid: string; name: string; tint: string; photoUri?: string; members?: LiveMember[] };
 
 /** One round of play: how much each player's score changed. A player left out had no change. The scores are always worked out from the list of rounds, so Undo is just removing the last one. */
 export type Round = { points: Record<string, number>; at: number };
@@ -53,6 +56,17 @@ export type LiveGame = {
   players: LivePlayer[];
   /** Penalty game (count up only): reaching the target LOSES, and the lowest score wins. */
   penalty?: boolean;
+  /** Count up with a target: you must also lead by this many points (2 for ping pong). */
+  winBy?: number;
+  /** Games with their own scoring screen: 'tap' adds one point per tap, 'cornhole' scores bags with cancellation. */
+  scorer?: 'tap' | 'cornhole';
+  /** Tap games where the serve moves every few points (ping pong). */
+  serve?: boolean;
+  firstServerUid?: string | null;
+  /** True when the sides are teams. */
+  teams?: boolean;
+  /** Team games with a dealer: the people in table order (teams sit alternately). The dealer moves down this list. */
+  seats?: string[];
   /** True when the game tracks whose turn it is to deal (card games). */
   dealer: boolean;
   /** Who deals in round 1. The deal then moves to the next player in the list every round. */
@@ -62,7 +76,15 @@ export type LiveGame = {
 
 /* ---------- A finished game, saved for the whole family ---------- */
 
-export type SavedPlayer = { uid: string; name: string; tint: string; score: number };
+/** One side of a saved game. For a team, `memberUids` and `members` say who was on it. */
+export type SavedPlayer = {
+  uid: string;
+  name: string;
+  tint: string;
+  score: number;
+  memberUids?: string[];
+  members?: { uid: string; name: string; tint: string }[];
+};
 
 /** Stored at families/{familyId}/games/{id}. Never edited after saving; an admin or the person who saved it can delete it. */
 export type SavedGame = {
@@ -76,10 +98,11 @@ export type SavedGame = {
   endedAt: number;
   createdByUid: string;
   players: SavedPlayer[];
-  /** Same people as `players`, as a plain list so the stats can ask "every game that includes this person". */
+  /** Every person who played (the people on each team too), as a plain list so the stats can ask "every game that includes this person". */
   playerUids: string[];
   /** Penalty game: whoever reached the target lost and the lowest score won. */
   penalty?: boolean;
+  winBy?: number;
   /** Round by round changes, like a score summary. Missing on games saved by older versions. */
   rounds?: { points: Record<string, number> }[];
   /** Usually one person. Several when a game with no target ends in a tie. Empty when nobody won. */

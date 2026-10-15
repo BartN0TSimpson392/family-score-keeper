@@ -5,5 +5,6 @@ import type { Key } from '@/i18n';
 export function targetLine(g: LiveGame, t: (key: Key, params?: Record<string, string | number>) => string): string {
   if (g.target == null) return t('noTargetUp');
   if (g.penalty && g.mode === 'up') return t('targetPenalty', { n: g.target });
-  return g.mode === 'up' ? t('targetUp', { n: g.target }) : t('targetDown', { start: g.start, n: g.target });
+  if (g.mode === 'up') return t('targetUp', { n: g.target }) + ((g.winBy ?? 1) > 1 ? t('winByN', { n: g.winBy ?? 2 }) : '');
+  return t('targetDown', { start: g.start, n: g.target });
 }

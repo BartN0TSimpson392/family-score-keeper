@@ -4,9 +4,9 @@ import { Redirect, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dealerFor, standings, useGame } from '@/data/game';
+import { dealerFor, personName, serverFor, standings, useGame } from '@/data/game';
 import { useI18n } from '@/i18n';
-import { Avatar } from '@/ui/components';
+import { SideAvatar } from '@/ui/SideAvatar';
 import { targetLine } from '@/ui/targetLine';
 
 const GAP = 12;
@@ -35,7 +35,10 @@ export default function Board() {
 
   const { scores, winnerUids, loserUids, leaders } = standings(game);
   const dealerUid = dealerFor(game, game.rounds.length);
-  const lastRound = game.rounds[game.rounds.length - 1];
+  const dealerSide = game.players.find((p) => p.uid === dealerUid || p.members?.some((m) => m.uid === dealerUid))?.uid;
+  const dealerLabel = game.teams ? personName(game, dealerUid) ?? t('dealerBadge') : t('dealerBadge');
+  const lastRound = game.scorer === 'tap' ? undefined : game.rounds[game.rounds.length - 1];
+  const serverUid = serverFor(game);
   const n = game.players.length;
   const boxW = Math.max(0, win.width - insets.left - insets.right - SIDE * 2);
   const boxH = Math.max(0, win.height - insets.top - insets.bottom - HEADER_H - BOTTOM);
@@ -62,14 +65,15 @@ export default function Board() {
               return (
                 <View key={p.uid} style={[styles.card, { width: cardW, height: cardH }, isLead && styles.lead, isWin && styles.win]}>
                   <View style={styles.who}>
-                    <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={Math.min(64, Math.max(32, cardH * 0.2))} />
+                    <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={Math.min(64, Math.max(32, cardH * 0.2))} />
                     <Text style={[styles.name, { fontSize: Math.min(34, Math.max(18, cardH * 0.11)) }]} numberOfLines={1}>
                       {isWin ? '🏆 ' : loserUids.includes(p.uid) ? '💥 ' : isLead ? '👑 ' : ''}{p.name}
                     </Text>
                   </View>
-                  {p.uid === dealerUid || lastRound ? (
+                  {p.uid === dealerSide || p.uid === serverUid || lastRound ? (
+
                     <Text style={[styles.extra, { fontSize: Math.min(24, Math.max(14, cardH * 0.08)) }]} numberOfLines={1}>
-                      {p.uid === dealerUid ? `🃏 ${t('dealerBadge')}   ` : ''}
+                      {p.uid === dealerSide ? `🃏 ${dealerLabel}   ` : ''}{p.uid === serverUid ? `🏓 ${t('serving')}   ` : ''}
                       {lastRound ? `${(lastRound.points[p.uid] ?? 0) > 0 ? '+' : (lastRound.points[p.uid] ?? 0) < 0 ? '−' : ''}${Math.abs(lastRound.points[p.uid] ?? 0)}` : ''}
                     </Text>
                   ) : null}

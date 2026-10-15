@@ -344,12 +344,22 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
       start: g.start,
       target: g.target,
       penalty: !!g.penalty,
+      ...(g.winBy ? { winBy: g.winBy } : {}),
       startedAt: g.startedAt,
       endedAt: Date.now(),
       createdByUid: uid,
-      players: g.players.map((p) => ({ uid: p.uid, name: p.name, tint: p.tint, score: scores[p.uid] ?? g.start })),
-      playerUids: g.players.map((p) => p.uid),
-      rounds: g.rounds.map((r) => ({ points: r.points })),
+      players: g.players.map((p) => ({
+        uid: p.uid,
+        name: p.name,
+        tint: p.tint,
+        score: scores[p.uid] ?? g.start,
+        ...(p.members && p.members.length > 0
+          ? { memberUids: p.members.map((m) => m.uid), members: p.members.map((m) => ({ uid: m.uid, name: m.name, tint: m.tint })) }
+          : {}),
+      })),
+      playerUids: g.players.flatMap((p) => (p.members && p.members.length > 0 ? p.members.map((m) => m.uid) : [p.uid])),
+      // One tap per point is too much detail to keep for every ping pong game.
+      ...(g.scorer === 'tap' ? {} : { rounds: g.rounds.map((r) => ({ points: r.points })) }),
       winnerUids: winnersOf(g),
     };
     await setDoc(ref, saved);

@@ -37,7 +37,9 @@ export function standings(g: LiveGame): Standings {
   for (const r of g.rounds) {
     for (const p of g.players) scores[p.uid] += r.points[p.uid] ?? 0;
     if (winnerUids.length === 0 && loserUids.length === 0 && g.target != null) {
-      const reached = g.players.filter((p) => hasReached(g, scores[p.uid]));
+      const lead = (uid: string) => scores[uid] - Math.max(...g.players.filter((q) => q.uid !== uid).map((q) => scores[q.uid]));
+      const mustLead = g.mode === 'up' && !g.penalty && (g.winBy ?? 1) > 1 ? g.winBy ?? 1 : 0;
+      const reached = g.players.filter((p) => hasReached(g, scores[p.uid]) && (mustLead === 0 || lead(p.uid) >= mustLead));
       if (reached.length > 0 && g.penalty) {
         // Reaching the target loses. The lowest score at that moment wins.
         loserUids = reached.map((p) => p.uid);
@@ -59,11 +61,50 @@ export function standings(g: LiveGame): Standings {
   return { scores, winnerUids, loserUids, leaders };
 }
 
+/** Who serves the next point (ping pong): the serve moves every 2 points, every 5 in a game to 21, and every point once it is a tie one point short of the target. */
+export function serverFor(g: LiveGame): string | null {
+  if (!g.serve || g.players.length < 2) return null;
+  const order = g.players.map((p) => p.uid);
+  let idx = Math.max(0, order.indexOf(g.firstServerUid ?? ''));
+  const scores: Record<string, number> = {};
+  for (const p of g.players) scores[p.uid] = g.start;
+  const normal = (g.target ?? 11) >= 21 ? 5 : 2;
+  let since = 0;
+  for (const r of g.rounds) {
+    for (const p of g.players) scores[p.uid] += r.points[p.uid] ?? 0;
+    since++;
+    const deuce = g.target != null && g.players.every((p) => scores[p.uid] >= g.target! - 1);
+    if (since >= (deuce ? 1 : normal)) {
+      idx = (idx + 1) % order.length;
+      since = 0;
+    }
+  }
+  return order[idx];
+}
+
 /** Who deals in the given round (0 is the first round). Null when the game does not track the dealer. */
-export function dealerFor(g: Pick<LiveGame, 'dealer' | 'firstDealerUid' | 'players'>, roundIndex: number): string | null {
-  if (!g.dealer || g.players.length === 0) return null;
-  const first = Math.max(0, g.players.findIndex((p) => p.uid === g.firstDealerUid));
-  return g.players[(first + roundIndex) % g.players.length].uid;
+export function dealerFor(g: Pick<LiveGame, 'dealer' | 'firstDealerUid' | 'players' | 'seats'>, roundIndex: number): string | null {
+  if (!g.dealer) return null;
+  const seats = g.seats && g.seats.length > 0 ? g.seats : g.players.map((p) => p.uid);
+  if (seats.length === 0) return null;
+  const first = Math.max(0, seats.indexOf(g.firstDealerUid ?? ''));
+  return seats[(first + roundIndex) % seats.length];
+}
+
+/** A person's name, whether they play alone or on a team. */
+export function personName(g: Pick<LiveGame, 'players'>, uid: string | null): string | undefined {
+  if (!uid) return undefined;
+  for (const p of g.players) {
+    if (p.uid === uid) return p.name;
+    const m = p.members?.find((x) => x.uid === uid);
+    if (m) return m.name;
+  }
+  return undefined;
+}
+
+/** Everyone who plays, team members included. */
+export function peopleIn(g: Pick<LiveGame, 'players'>): { uid: string; name: string }[] {
+  return g.players.flatMap((p) => (p.members && p.members.length > 0 ? p.members : [p]));
 }
 
 /** Who gets the win when the game is saved. A reached target wins. With no target, the best score wins (a tie shares it). A target nobody reached means no winner. */
@@ -76,7 +117,7 @@ export function winnersOf(g: LiveGame): string[] {
 }
 
 /** The rules a game was last started with on this phone, so picking it again fills them in. */
-export type Rules = { mode: Mode; start: number; target: number | null; dealer: boolean; penalty?: boolean };
+export type Rules = { mode: Mode; start: number; target: number | null; dealer: boolean; penalty?: boolean; teams?: boolean; winBy?: number };
 
 export type GameStore = {
   ready: boolean;
@@ -85,7 +126,7 @@ export type GameStore = {
   recentNames: string[];
   /** Rules last used for a game name on this phone (even if that game was never saved). */
   rulesFor: (name: string) => Rules | undefined;
-  startGame: (p: { name: string; mode: Mode; start: number; target: number | null; players: LivePlayer[]; dealer: boolean; firstDealerUid: string | null; penalty?: boolean }) => void;
+  startGame: (p: { name: string; mode: Mode; start: number; target: number | null; players: LivePlayer[]; dealer: boolean; firstDealerUid: string | null; penalty?: boolean; teams?: boolean; seats?: string[]; winBy?: number; scorer?: 'tap' | 'cornhole'; serve?: boolean; firstServerUid?: string | null }) => void;
   /** Adds one round. `points` holds each player's change in score. */
   addRound: (points: Record<string, number>) => void;
   undo: () => void;
@@ -138,7 +179,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     else AsyncStorage.removeItem(LIVE_KEY).catch(() => {});
   }, [game, ready]);
 
-  const startGame = useCallback<GameStore['startGame']>(({ name, mode, start, target, players, dealer, firstDealerUid, penalty }) => {
+  const startGame = useCallback<GameStore['startGame']>(({ name, mode, start, target, players, dealer, firstDealerUid, penalty, teams, seats, winBy, scorer, serve, firstServerUid }) => {
     const gameName = name.trim();
     setGame({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
@@ -151,11 +192,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       players,
       penalty: mode === 'up' && target != null && !!penalty,
       dealer,
-      firstDealerUid: dealer ? firstDealerUid ?? players[0]?.uid ?? null : null,
+      winBy: mode === 'up' && target != null && !penalty && winBy && winBy > 1 ? winBy : undefined,
+      scorer,
+      serve: !!serve,
+      firstServerUid: serve ? firstServerUid ?? players[0]?.uid ?? null : null,
+      teams: !!teams,
+      seats: teams && dealer ? seats : undefined,
+      firstDealerUid: dealer ? firstDealerUid ?? seats?.[0] ?? players[0]?.uid ?? null : null,
       rounds: [],
     });
     setRules((prev) => {
-      const next = { ...prev, [gameKeyFor(gameName)]: { mode, start, target, dealer, penalty: !!penalty } };
+      const next = { ...prev, [gameKeyFor(gameName)]: { mode, start, target, dealer, penalty: !!penalty, teams: !!teams, winBy } };
       AsyncStorage.setItem(RULES_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });

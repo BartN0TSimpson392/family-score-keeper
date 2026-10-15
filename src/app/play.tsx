@@ -2,10 +2,11 @@ import * as Haptics from 'expo-haptics';
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { dealerFor, standings, useGame } from '@/data/game';
+import { dealerFor, personName, serverFor, standings, useGame } from '@/data/game';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, BigButton, ErrorText, SmallButton } from '@/ui/components';
+import { SideAvatar } from '@/ui/SideAvatar';
 import { RoundsTable } from '@/ui/RoundsTable';
 import { colors } from '@/ui/theme';
 import { targetLine } from '@/ui/targetLine';
@@ -20,6 +21,7 @@ export default function Play() {
   const { saveGame } = useFamily();
   const [saving, setSaving] = useState(false);
   const [entering, setEntering] = useState(false);
+  const [bags, setBags] = useState<Record<string, { hole: number; board: number }>>({});
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [entryError, setEntryError] = useState('');
   if (!game) return <Redirect href="/home" />;
@@ -28,11 +30,38 @@ export default function Play() {
   const losers = game.players.filter((p) => loserUids.includes(p.uid));
   const winners = game.players.filter((p) => winnerUids.includes(p.uid));
   const roundNo = game.rounds.length + 1;
+  const isTap = game.scorer === 'tap';
+  const isCorn = game.scorer === 'cornhole' && game.players.length === 2;
+  const serverUid = serverFor(game);
+
+  const tapPoint = (uid: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    addRound({ [uid]: 1 });
+  };
+
+  // Cornhole: 3 for a bag in the hole, 1 for a bag on the board. The lower total cancels out and only the difference scores.
+  const rawOf = (uid: string) => 3 * (bags[uid]?.hole ?? 0) + (bags[uid]?.board ?? 0);
+  const [sideA, sideB] = game.players;
+  const cornNet = isCorn ? rawOf(sideA.uid) - rawOf(sideB.uid) : 0;
+  const cornScorer = cornNet > 0 ? sideA : cornNet < 0 ? sideB : null;
+  const bump = (uid: string, field: 'hole' | 'board', d: number) =>
+    setBags((prev) => {
+      const cur = prev[uid] ?? { hole: 0, board: 0 };
+      const max = game.teams ? 8 : 4;
+      const v = Math.max(0, Math.min(max, cur[field] + d));
+      return { ...prev, [uid]: { ...cur, [field]: v } };
+    });
+  const saveCorn = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    addRound(cornScorer ? { [cornScorer.uid]: Math.abs(cornNet) } : {});
+    setEntering(false);
+  };
   const dealerUid = dealerFor(game, game.rounds.length);
-  const dealerName = game.players.find((p) => p.uid === dealerUid)?.name;
+  const dealerName = personName(game, dealerUid);
   const lastRound = game.rounds[game.rounds.length - 1];
 
   const openEntry = () => {
+    setBags({});
     setTexts({});
     setEntryError('');
     setEntering(true);
@@ -102,6 +131,37 @@ export default function Play() {
         <SmallButton label={t('fullScreen')} tone="primary" style={{ minHeight: 48 }} onPress={() => router.push('/board')} />
       </View>
 
+      {isTap ? (
+        <View style={{ flex: 1, gap: 12, padding: 16 }}>
+          {winners.length > 0 ? (
+            <View style={styles.winner} accessibilityRole="alert">
+              <Text style={styles.winnerText}>🏆 {t('winnerBanner', { name: winners.map((w) => w.name).join(' & ') })}</Text>
+            </View>
+          ) : null}
+          {game.players.map((p) => {
+            const isWinner = winnerUids.includes(p.uid);
+            return (
+              <Pressable
+                key={p.uid}
+                onPress={() => tapPoint(p.uid)}
+                accessibilityRole="button"
+                accessibilityLabel={`${p.name}: ${scores[p.uid]}. ${t('tapToScore')}`}
+                style={({ pressed }) => [styles.tapCard, p.uid === serverUid && styles.cardLead, isWinner && styles.cardWin, pressed && { opacity: 0.7 }]}
+              >
+                <View style={styles.cardTop}>
+                  <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={52} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.playerName} numberOfLines={1}>{isWinner ? '🏆 ' : ''}{p.name}</Text>
+                    {p.uid === serverUid ? <Text style={styles.badge}>🏓 {t('serving')}</Text> : null}
+                  </View>
+                </View>
+                <Text style={styles.tapScore} adjustsFontSizeToFit numberOfLines={1}>{scores[p.uid]}</Text>
+                <Text style={styles.tapHint}>{t('tapToScore')}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={{ gap: 12, padding: 16, paddingBottom: 8 }}>
         {winners.length > 0 ? (
           <View style={styles.winner} accessibilityRole="alert">
@@ -123,7 +183,7 @@ export default function Play() {
           return (
             <View key={p.uid} style={[styles.card, isLeader && styles.cardLead, isWinner && styles.cardWin]}>
               <View style={styles.cardTop}>
-                <Avatar name={p.name} tint={p.tint} photoUri={p.photoUri} size={52} />
+                <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={52} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.playerName} numberOfLines={1}>{isWinner ? '🏆 ' : isLoser ? '💥 ' : isLeader ? '👑 ' : ''}{p.name}</Text>
                 </View>
@@ -145,16 +205,44 @@ export default function Play() {
           <Text style={styles.empty}>{t('noRoundsYet')}</Text>
         )}
       </ScrollView>
+      )}
 
       <View style={styles.bottom}>
-        <BigButton label={t('addRound')} height={64} onPress={openEntry} />
+        {isTap ? null : <BigButton label={t('addRound')} height={64} onPress={openEntry} />}
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <SmallButton label={t('undo')} style={{ flex: 1, minHeight: 56, opacity: game.rounds.length ? 1 : 0.4 }} onPress={() => game.rounds.length && undo()} />
           <BigButton label={saving ? t('working') : t('endGame')} tone="outline" height={56} disabled={saving} style={{ flex: 1 }} onPress={confirmEnd} />
         </View>
       </View>
 
-      <Modal visible={entering} transparent animationType="fade" onRequestClose={() => setEntering(false)}>
+      <Modal visible={entering && isCorn} transparent animationType="fade" onRequestClose={() => setEntering(false)}>
+        <View style={styles.modalBack}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
+            <Text style={styles.help}>{t('bagsHelp')}</Text>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 14 }}>
+              {game.players.map((p) => (
+                <View key={p.uid} style={styles.bagBox}>
+                  <View style={styles.entryRow}>
+                    <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={40} />
+                    <Text style={styles.entryName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={styles.bagTotal}>{rawOf(p.uid)}</Text>
+                  </View>
+                  <Stepper label={`${t('bagsHole')} (3)`} value={bags[p.uid]?.hole ?? 0} onChange={(d) => bump(p.uid, 'hole', d)} />
+                  <Stepper label={`${t('bagsBoard')} (1)`} value={bags[p.uid]?.board ?? 0} onChange={(d) => bump(p.uid, 'board', d)} />
+                </View>
+              ))}
+            </ScrollView>
+            <Text style={styles.dealerText}>{cornScorer ? t('cornholeNet', { name: cornScorer.name, n: Math.abs(cornNet) }) : t('cornholeTie')}</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <SmallButton label={t('cancel')} style={{ flex: 1, minHeight: 60, borderColor: colors.inputBorder }} onPress={() => setEntering(false)} />
+              <SmallButton label={t('saveRound')} tone="primary" style={{ flex: 1.4, minHeight: 60 }} onPress={saveCorn} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={entering && !isCorn} transparent animationType="fade" onRequestClose={() => setEntering(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalBack}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
@@ -191,7 +279,32 @@ export default function Play() {
   );
 }
 
+function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (d: number) => void }) {
+  return (
+    <View style={styles.stepRow}>
+      <Text style={styles.stepLabel}>{label}</Text>
+      <Pressable onPress={() => onChange(-1)} accessibilityRole="button" accessibilityLabel={`${label} −1`} style={styles.stepBtn}>
+        <Text style={styles.stepBtnText}>−</Text>
+      </Pressable>
+      <Text style={styles.stepValue}>{value}</Text>
+      <Pressable onPress={() => onChange(1)} accessibilityRole="button" accessibilityLabel={`${label} +1`} style={[styles.stepBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+        <Text style={[styles.stepBtnText, { color: colors.cream }]}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  tapCard: { flex: 1, padding: 14, gap: 4, borderRadius: 22, backgroundColor: colors.card, borderWidth: 3, borderColor: colors.border, justifyContent: 'space-between' },
+  tapScore: { textAlign: 'center', fontWeight: '800', fontSize: 120, lineHeight: 130, color: colors.ink },
+  tapHint: { textAlign: 'center', fontSize: 16, color: colors.soft },
+  bagBox: { gap: 8, padding: 12, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border },
+  bagTotal: { fontWeight: '800', fontSize: 32, color: colors.ink },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepLabel: { flex: 1, fontWeight: '600', fontSize: 19, color: colors.ink },
+  stepBtn: { width: 56, height: 56, borderRadius: 28, borderWidth: 2.5, borderColor: colors.teal, alignItems: 'center', justifyContent: 'center' },
+  stepBtnText: { fontWeight: '800', fontSize: 30, lineHeight: 34, color: colors.teal },
+  stepValue: { width: 34, textAlign: 'center', fontWeight: '800', fontSize: 28, color: colors.ink },
   screen: { flex: 1, backgroundColor: colors.paper },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
   back: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' },
