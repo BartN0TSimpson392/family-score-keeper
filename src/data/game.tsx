@@ -43,6 +43,14 @@ export function standings(g: LiveGame): Standings {
   return { scores, winnerUid, leaders };
 }
 
+/** Who gets the win when the game is saved. A reached target wins. With no target, the best score wins (a tie shares it). A target nobody reached means no winner. */
+export function winnersOf(g: LiveGame): string[] {
+  const s = standings(g);
+  if (s.winnerUid) return [s.winnerUid];
+  if (g.target == null) return s.leaders;
+  return [];
+}
+
 export type GameStore = {
   ready: boolean;
   game: LiveGame | null;

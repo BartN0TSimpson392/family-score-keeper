@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, doc, getDoc, getDocFromServer, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocFromServer, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -8,7 +8,8 @@ import { deleteByUrl, uploadFile } from '@/firebase/storage';
 import type { Lang } from '@/i18n';
 import { TINTS } from '@/ui/theme';
 import { newCodeKey, parseCode, wordsFor } from './codes';
-import type { Member, Session } from './types';
+import { standings, winnersOf } from './game';
+import type { LiveGame, Member, SavedGame, Session } from './types';
 
 /**
  * The only thing screens know about data. Everything shared lives in Firebase:
@@ -44,6 +45,12 @@ export type FamilyStore = {
   removeMember: (uid: string) => Promise<void>;
   /** Makes a new family code; the old one stops working. */
   newCode: () => Promise<void>;
+  /** Every finished game, newest first. */
+  games: SavedGame[];
+  /** Saves a finished game for the whole family. Safe to call again after a failure. Throws if it could not be saved. */
+  saveGame: (g: LiveGame) => Promise<void>;
+  /** Deletes a saved game (allowed for whoever saved it, and for admins). */
+  deleteGame: (id: string) => Promise<void>;
   signOut: () => void;
 };
 
@@ -63,6 +70,7 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
   const [base, setBaseState] = useState<Base>(emptyBase);
   const [family, setFamily] = useState<FamilyDoc | null>(null);
   const [rawMembers, setMembers] = useState<Member[]>([]);
+  const [games, setGames] = useState<SavedGame[]>([]);
   /** This person's own entry, watched while waiting for approval. */
   const [selfDoc, setSelfDoc] = useState<Partial<Member> | null>(null);
   const [ready, setReady] = useState(false);
@@ -139,6 +147,7 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     if (!base.signedIn || !base.familyId || base.pending) {
       setFamily(null);
       setMembers([]);
+      setGames([]);
       return;
     }
     let cancelled = false;
@@ -164,6 +173,13 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
             collection(db, 'families', fid, 'members'),
             (s) => setMembers(s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Member, 'id'>) }))),
             fail('the members'),
+          ),
+        );
+        unsubs.push(
+          onSnapshot(
+            query(collection(db, 'families', fid, 'games'), orderBy('endedAt', 'desc')),
+            (s) => setGames(s.docs.map((d) => ({ ...(d.data() as Omit<SavedGame, 'id'>), id: d.id }))),
+            fail('the games'),
           ),
         );
       })
@@ -309,6 +325,40 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     await batch.commit();
   }, []);
 
+  const saveGame = useCallback<FamilyStore['saveGame']>(async (g) => {
+    const { familyId, uid } = baseRef.current;
+    if (!familyId || !uid) throw new Error('Not in a family');
+    await ensureSignedIn();
+    const ref = doc(db, 'families', familyId, 'games', g.id);
+    // A retry after a lost connection: if the first attempt did get through, there is nothing more to do.
+    try {
+      if ((await getDoc(ref)).exists()) return;
+    } catch {
+      // Could not check; try to save anyway.
+    }
+    const { scores } = standings(g);
+    const saved: Omit<SavedGame, 'id'> = {
+      gameKey: g.gameKey,
+      gameName: g.gameName,
+      mode: g.mode,
+      start: g.start,
+      target: g.target,
+      startedAt: g.startedAt,
+      endedAt: Date.now(),
+      createdByUid: uid,
+      players: g.players.map((p) => ({ uid: p.uid, name: p.name, tint: p.tint, score: scores[p.uid] ?? g.start })),
+      playerUids: g.players.map((p) => p.uid),
+      winnerUids: winnersOf(g),
+    };
+    await setDoc(ref, saved);
+  }, []);
+
+  const deleteGame = useCallback<FamilyStore['deleteGame']>(async (id) => {
+    const { familyId } = baseRef.current;
+    if (!familyId) return;
+    await deleteDoc(doc(db, 'families', familyId, 'games', id));
+  }, []);
+
   const value = useMemo<FamilyStore>(() => {
     const session: Session = {
       ...base,
@@ -335,9 +385,12 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
       makeAdmin,
       removeMember,
       newCode,
+      games,
+      saveGame,
+      deleteGame,
       signOut: () => setBase(emptyBase),
     };
-  }, [base, family, rawMembers, selfDoc, ready, members, pendingMembers, createFamily, joinFamily, lookupCode, setMyPhoto, refreshRequest, approveMember, declineMember, makeAdmin, removeMember, newCode, setBase]);
+  }, [base, family, rawMembers, selfDoc, ready, members, pendingMembers, createFamily, joinFamily, lookupCode, setMyPhoto, refreshRequest, approveMember, declineMember, makeAdmin, removeMember, newCode, games, saveGame, deleteGame, setBase]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

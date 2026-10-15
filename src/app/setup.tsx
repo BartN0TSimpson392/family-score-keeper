@@ -1,7 +1,7 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useGame } from '@/data/game';
+import { gameKeyFor, useGame } from '@/data/game';
 import { useFamily } from '@/data/store';
 import type { Mode } from '@/data/types';
 import { useI18n } from '@/i18n';
@@ -14,7 +14,7 @@ const MAX_PLAYERS = 8;
 export default function Setup() {
   const router = useRouter();
   const { t } = useI18n();
-  const { session, members } = useFamily();
+  const { session, members, games } = useFamily();
   const { startGame, recentNames } = useGame();
   const [name, setName] = useState('');
   const [mode, setMode] = useState<Mode>('up');
@@ -27,8 +27,36 @@ export default function Setup() {
   // You first, then everyone else in the usual order.
   const ordered = useMemo(() => [...members].sort((a, b) => Number(b.id === session.uid) - Number(a.id === session.uid)), [members, session.uid]);
 
+  // Names this phone used before, plus every game the family has saved.
+  const suggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const n of [...recentNames, ...games.map((g) => g.gameName)]) {
+      const key = gameKeyFor(n);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(n);
+      }
+    }
+    return out.slice(0, 8);
+  }, [recentNames, games]);
+
   if (!session.signedIn) return <Redirect href="/welcome" />;
   if (session.pending) return <Redirect href="/waiting" />;
+
+  // Picking a game played before also fills in the rules it used last time.
+  const pickName = (n: string) => {
+    setName(n);
+    setError('');
+    const last = games.find((g) => g.gameKey === gameKeyFor(n));
+    if (!last) return;
+    setMode(last.mode);
+    if (last.mode === 'up') setTargetText(last.target != null ? String(last.target) : '');
+    else {
+      setStartText(String(last.start));
+      setGoalText(String(last.target ?? 0));
+    }
+  };
 
   const toggle = (id: string) => {
     setError('');
@@ -70,12 +98,12 @@ export default function Setup() {
           <H1>{t('setupH')}</H1>
 
           <Field label={t('fldGameName')} value={name} onChangeText={(v) => { setName(v); setError(''); }} placeholder={t('gameNamePlaceholder')} autoCapitalize="words" returnKeyType="done" />
-          {recentNames.length > 0 ? (
+          {suggestions.length > 0 ? (
             <View style={{ gap: 6 }}>
               <Text style={styles.small}>{t('recentGames')}</Text>
               <View style={styles.chips}>
-                {recentNames.slice(0, 8).map((n) => (
-                  <Pressable key={n} onPress={() => { setName(n); setError(''); }} style={styles.chip} accessibilityRole="button">
+                {suggestions.map((n) => (
+                  <Pressable key={n} onPress={() => pickName(n)} style={styles.chip} accessibilityRole="button">
                     <Text style={styles.chipText}>{n}</Text>
                   </Pressable>
                 ))}

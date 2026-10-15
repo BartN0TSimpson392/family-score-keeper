@@ -53,3 +53,25 @@ export type LiveGame = {
   players: LivePlayer[];
   log: LiveEntry[];
 };
+
+/* ---------- A finished game, saved for the whole family ---------- */
+
+export type SavedPlayer = { uid: string; name: string; tint: string; score: number };
+
+/** Stored at families/{familyId}/games/{id}. Never edited after saving; an admin or the person who saved it can delete it. */
+export type SavedGame = {
+  id: string;
+  gameKey: string;
+  gameName: string;
+  mode: Mode;
+  start: number;
+  target: number | null;
+  startedAt: number;
+  endedAt: number;
+  createdByUid: string;
+  players: SavedPlayer[];
+  /** Same people as `players`, as a plain list so the stats can ask "every game that includes this person". */
+  playerUids: string[];
+  /** Usually one person. Several when a game with no target ends in a tie. Empty when nobody won. */
+  winnerUids: string[];
+};

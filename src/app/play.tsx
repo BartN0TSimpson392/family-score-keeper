@@ -3,6 +3,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { standings, useGame } from '@/data/game';
+import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, BigButton, SmallButton } from '@/ui/components';
 import { colors } from '@/ui/theme';
@@ -15,6 +16,8 @@ export default function Play() {
   const router = useRouter();
   const { t } = useI18n();
   const { game, addPoints, undo, endGame } = useGame();
+  const { saveGame } = useFamily();
+  const [saving, setSaving] = useState(false);
   const [customFor, setCustomFor] = useState<string | null>(null);
   const [customText, setCustomText] = useState('');
   if (!game) return <Redirect href="/home" />;
@@ -37,18 +40,40 @@ export default function Play() {
     setCustomText('');
   };
 
-  const confirmEnd = () =>
+  const saveAndLeave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveGame(game);
+      endGame();
+      router.replace('/history');
+    } catch (e) {
+      console.warn('Could not save the game', (e as { code?: string })?.code ?? e);
+      Alert.alert(t('saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discard = () => {
+    endGame();
+    router.replace('/home');
+  };
+
+  const confirmEnd = () => {
+    if (game.log.length === 0) {
+      Alert.alert(t('endGameH'), t('noPointsYet'), [
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('discardGame'), style: 'destructive', onPress: discard },
+      ]);
+      return;
+    }
     Alert.alert(t('endGameH'), t('endGameSure'), [
+      { text: t('saveToHistory'), onPress: () => void saveAndLeave() },
+      { text: t('discardGame'), style: 'destructive', onPress: discard },
       { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('endGame'),
-        style: 'destructive',
-        onPress: () => {
-          endGame();
-          router.replace('/home');
-        },
-      },
     ]);
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -94,7 +119,7 @@ export default function Play() {
 
       <View style={styles.bottom}>
         <SmallButton label={t('undo')} style={{ flex: 1, minHeight: 60, opacity: game.log.length ? 1 : 0.4 }} onPress={() => game.log.length && undo()} />
-        <BigButton label={t('endGame')} tone="outline" height={60} style={{ flex: 1 }} onPress={confirmEnd} />
+        <BigButton label={saving ? t('working') : t('endGame')} tone="outline" height={60} disabled={saving} style={{ flex: 1 }} onPress={confirmEnd} />
       </View>
 
       <Modal visible={customFor !== null} transparent animationType="fade" onRequestClose={() => setCustomFor(null)}>

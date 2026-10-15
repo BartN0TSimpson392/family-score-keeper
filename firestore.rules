@@ -75,6 +75,16 @@ service cloud.firestore {
         // Nobody is ever deleted; removal just marks the entry so it can be undone.
         allow delete: if false;
       }
+
+      // Finished games. Any approved member can add one, nobody can change one afterwards (so the stats stay
+      // trustworthy), and only the person who saved it or an admin can delete it.
+      match /games/{gid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && request.resource.data.createdByUid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isMember(fid)
+          && (resource.data.createdByUid == request.auth.uid || isAdmin(fid));
+      }
     }
   }
 }
