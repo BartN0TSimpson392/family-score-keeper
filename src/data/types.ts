@@ -28,3 +28,28 @@ export type Session = {
   /** This person's own selfie, once it is saved. */
   photoUri?: string;
 };
+
+/* ---------- A game being played right now (kept on this phone until it is finished) ---------- */
+
+/** "up": add points until you reach the target. "down": start at the target and subtract until you reach zero. */
+export type Mode = 'up' | 'down';
+
+export type LivePlayer = { uid: string; name: string; tint: string; photoUri?: string };
+
+/** One tap on a score button. The scores are always worked out from this list, so Undo is just removing the last one. */
+export type LiveEntry = { uid: string; delta: number; at: number };
+
+export type LiveGame = {
+  id: string;
+  /** Lower-case, accent-free version of the name. Games with the same key share one history and one set of stats. */
+  gameKey: string;
+  gameName: string;
+  mode: Mode;
+  /** Where everyone starts. Always 0 when counting up. */
+  start: number;
+  /** The score that wins. Counting up: reach or pass it. Counting down: reach or go below it. Null (count up only) means the game ends when someone taps End game, and the best score wins. */
+  target: number | null;
+  startedAt: number;
+  players: LivePlayer[];
+  log: LiveEntry[];
+};

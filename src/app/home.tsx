@@ -1,15 +1,16 @@
 import { Redirect, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
+import { useGame } from '@/data/game';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
-import { Avatar, BigButton, Body, H1, Notice, Screen } from '@/ui/components';
+import { Avatar, BigButton, Body, H1, Screen } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
-/** Home. For now it only shows the family; the games arrive in the next steps. */
 export default function Home() {
   const router = useRouter();
   const { t, plural } = useI18n();
   const { session, members, pendingMembers } = useFamily();
+  const { game } = useGame();
   if (!session.signedIn) return <Redirect href="/welcome" />;
   if (session.pending) return <Redirect href="/waiting" />;
 
@@ -19,12 +20,20 @@ export default function Home() {
   return (
     <Screen
       bottom={
-        <BigButton
-          label={t('familyBtn')}
-          sub={waiting > 0 ? plural('pendingBadge', waiting) : undefined}
-          tone="teal"
-          onPress={() => router.push('/family')}
-        />
+        <View style={{ gap: 14 }}>
+          {game ? (
+            <BigButton label={t('continueGame', { name: game.gameName })} onPress={() => router.push('/play')} />
+          ) : (
+            <BigButton label={t('startGame')} onPress={() => router.push('/games')} />
+          )}
+          <BigButton
+            label={t('familyBtn')}
+            sub={waiting > 0 ? plural('pendingBadge', waiting) : undefined}
+            tone="teal"
+            height={84}
+            onPress={() => router.push('/family')}
+          />
+        </View>
       }
     >
       <View style={styles.header}>
@@ -35,7 +44,6 @@ export default function Home() {
       </View>
       <H1>{t('homeH', { name: session.userName })}</H1>
       <Body>{plural('peopleCount', members.length)}</Body>
-      <Notice>{t('comingSoon')}</Notice>
     </Screen>
   );
 }

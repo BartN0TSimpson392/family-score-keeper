@@ -3,7 +3,7 @@
     "name": "Family Score Keeper",
     "slug": "family-score-keeper",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
