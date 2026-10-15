@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// Family Score Keeper: who can read and write what.
+// A phone signs in anonymously. Being in a family means having a document in families/{id}/members/{uid}
+// that has not been marked "removed" and is not still "pending" (a new person waits for an admin to approve them).
+// The person who created the family (adminUid) is always an admin.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function family(fid) {
+      return /databases/$(database)/documents/families/$(fid);
+    }
+    function memberDoc(fid, uid) {
+      return /databases/$(database)/documents/families/$(fid)/members/$(uid);
+    }
+    function isMember(fid) {
+      return signedIn()
+        && exists(memberDoc(fid, request.auth.uid))
+        && get(memberDoc(fid, request.auth.uid)).data.get('removed', false) == false
+        && get(memberDoc(fid, request.auth.uid)).data.get('pending', false) == false;
+    }
+    function isAdmin(fid) {
+      return isMember(fid)
+        && (get(family(fid)).data.adminUid == request.auth.uid
+            || get(memberDoc(fid, request.auth.uid)).data.isAdmin == true);
+    }
+
+    // Family code -> family. Nobody can read these directly: looking a code up goes through the lookupCode
+    // function, which counts wrong guesses and stops anyone who keeps guessing.
+    match /codes/{codeKey} {
+      allow get, list: if false;
+      // Only an admin of that family can make a code for it.
+      allow create: if signedIn()
+        && getAfter(family(request.resource.data.familyId)).data.codeKey == codeKey
+        && (getAfter(family(request.resource.data.familyId)).data.adminUid == request.auth.uid
+            || isAdmin(request.resource.data.familyId));
+      allow delete: if signedIn() && isAdmin(resource.data.familyId);
+      allow update: if false;
+    }
+
+    match /families/{fid} {
+      allow read: if isMember(fid);
+      allow create: if signedIn() && request.resource.data.adminUid == request.auth.uid;
+      // Admins can rename the family and change its code, but never change who created it.
+      allow update: if isAdmin(fid) && request.resource.data.adminUid == resource.data.adminUid;
+      allow delete: if false;
+
+      match /members/{uid} {
+        // Members see everyone; anyone can see their own entry (so a person who is waiting can see when they are approved).
+        allow read: if isMember(fid) || (signedIn() && request.auth.uid == uid);
+        allow create: if signedIn() && request.auth.uid == uid && (
+          // The person who is creating the family joins as its admin...
+          (request.resource.data.isAdmin == true && getAfter(family(fid)).data.adminUid == uid
+            && request.resource.data.get('pending', false) == false)
+          // ...everyone else must bring the family's current code, and starts out waiting for approval.
+          || (request.resource.data.isAdmin == false
+            && request.resource.data.get('pending', false) == true
+            && request.resource.data.get('removed', false) == false
+            && request.resource.data.joinCode == get(family(fid)).data.codeKey)
+        );
+        allow update: if signedIn() && (
+          // You can edit your own entry, but not make yourself admin or undo being removed.
+          (request.auth.uid == uid
+            && request.resource.data.isAdmin == resource.data.isAdmin
+            && request.resource.data.get('removed', false) == resource.data.get('removed', false)
+            && request.resource.data.get('pending', false) == resource.data.get('pending', false))
+          // Admins can edit anyone's entry (make admin, remove, restore), except the creator can never lose access.
+          || (isAdmin(fid)
+            && (uid != get(family(fid)).data.adminUid
+                || (request.resource.data.isAdmin == true && request.resource.data.get('removed', false) == false)))
+        );
+        // Nobody is ever deleted; removal just marks the entry so it can be undone.
+        allow delete: if false;
+      }
+    }
+  }
+}

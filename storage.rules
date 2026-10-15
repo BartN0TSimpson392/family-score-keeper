@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Photos live in families/{familyId}/... and only current members of that family can use them.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // A new person who is still waiting for approval may upload their own profile photo (named after their user id),
+    // so the admin can see who is asking to join.
+    match /families/{fid}/profiles/{file} {
+      function ownPhoto() {
+        return request.auth != null
+          && file.matches(request.auth.uid + '-.*')
+          && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid)).data.get('removed', false) == false;
+      }
+      allow read: if ownPhoto();
+      allow create, update: if ownPhoto()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /families/{fid}/{allPaths=**} {
+      function isMember() {
+        return request.auth != null
+          && firestore.exists(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid)).data.get('removed', false) == false
+          && firestore.get(/databases/(default)/documents/families/$(fid)/members/$(request.auth.uid)).data.get('pending', false) == false;
+      }
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isMember();
+    }
+  }
+}

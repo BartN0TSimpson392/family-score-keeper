@@ -17,7 +17,18 @@
       "permissions": []
     },
     "scheme": "familyscorekeeper",
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Family Score Keeper does not read your photo library.",
+          "cameraPermission": "Family Score Keeper uses the camera so you can take a selfie that shows your family who you are.",
+          "microphonePermission": false
+        }
+      ]
+    ],
     "backgroundColor": "#F4F1EA",
     "extra": {
       "router": {}
