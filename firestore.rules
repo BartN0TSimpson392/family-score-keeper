@@ -76,6 +76,14 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Games in progress, shared live so every phone in the family sees the same scoreboard.
+      // Any approved member can start one, add scores to it and end it.
+      match /liveGames/{gid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && request.resource.data.createdByUid == request.auth.uid;
+        allow update, delete: if isMember(fid);
+      }
+
       // Finished games. Any approved member can add one, nobody can change one afterwards (so the stats stay
       // trustworthy), and only the person who saved it or an admin can delete it.
       match /games/{gid} {

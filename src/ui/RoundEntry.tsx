@@ -11,9 +11,9 @@ import { colors } from '@/ui/theme';
  * The box for adding one round: typed points for each player, or the bag counter for cornhole.
  * Used by the Play screen and by the full-screen scoreboard.
  */
-export function RoundEntry({ visible, onClose, focusUid }: { visible: boolean; onClose: () => void; focusUid?: string | null }) {
+export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; onClose: () => void; /** Enter points for just this player (they go into the next round). Leave out to enter everyone. */ onlyUid?: string | null }) {
   const { t } = useI18n();
-  const { game, addRound } = useGame();
+  const { game, addRound, enterPoints } = useGame();
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [bags, setBags] = useState<Record<string, { hole: number; board: number }>>({});
   const [error, setError] = useState('');
@@ -22,31 +22,36 @@ export function RoundEntry({ visible, onClose, focusUid }: { visible: boolean; o
   // Every time the box opens it starts empty.
   useEffect(() => {
     if (visible) {
-      setTexts({});
+      // Points already typed for this round (by anyone) are shown, so they can be fixed.
+      const start: Record<string, string> = {};
+      for (const [uid, v] of Object.entries(game?.pending ?? {})) start[uid] = String(game?.mode === 'down' ? -v : v);
+      setTexts(start);
       setBags({});
       setError('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   if (!game) return null;
   const isCorn = game.scorer === 'cornhole' && game.players.length === 2;
   const roundNo = game.rounds.length + 1;
   const dealerName = personName(game, dealerFor(game, game.rounds.length));
-  const firstUid = focusUid && game.players.some((p) => p.uid === focusUid) ? focusUid : game.players[0]?.uid;
+  const shown = onlyUid ? game.players.filter((p) => p.uid === onlyUid) : game.players;
+  const single = shown.length === 1 && game.players.length > 1 ? shown[0] : null;
+  const firstUid = shown[0]?.uid;
 
   const save = () => {
     const points: Record<string, number> = {};
-    for (const p of game.players) {
+    for (const p of shown) {
       const raw = (texts[p.uid] ?? '').trim().replace('−', '-');
-      if (raw === '') continue;
-      if (!/^-?\d{1,6}$/.test(raw)) return setError(t('badPoints'));
-      const v = parseInt(raw, 10);
+      if (raw !== '' && !/^-?\d{1,6}$/.test(raw)) return setError(t('badPoints'));
+      const v = raw === '' ? 0 : parseInt(raw, 10);
       // Counting down, you type the points someone scored and they come off the score.
-      const delta = game.mode === 'down' ? -v : v;
-      if (delta !== 0) points[p.uid] = delta;
+      points[p.uid] = game.mode === 'down' ? -v || 0 : v;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    addRound(points);
+    if (single) enterPoints(single.uid, points[single.uid]);
+    else addRound(points);
     onClose();
   };
 
@@ -105,11 +110,12 @@ export function RoundEntry({ visible, onClose, focusUid }: { visible: boolean; o
     <Modal visible={visible} transparent animationType="fade" supportedOrientations={[...orientations]} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalBack}>
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
+          <Text style={styles.modalTitle}>{single ? t('pointsFor', { name: single.name }) : t('roundTitle', { n: roundNo })}</Text>
+          {single ? <Text style={styles.dealerText}>{t('roundTitle', { n: roundNo })}</Text> : null}
           {dealerName ? <Text style={styles.dealerText}>🃏 {t('dealsNow', { name: dealerName })}</Text> : null}
-          <Text style={styles.help}>{game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>
+          <Text style={styles.help}>{single ? (game.mode === 'up' ? t('roundHelpOne') : t('roundHelpOneDown')) : game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
-            {game.players.map((p) => (
+            {shown.map((p) => (
               <View key={p.uid} style={styles.entryRow}>
                 <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={44} />
                 <Text style={styles.entryName} numberOfLines={1}>{p.name}</Text>
@@ -136,7 +142,7 @@ export function RoundEntry({ visible, onClose, focusUid }: { visible: boolean; o
           {error ? <ErrorText>{error}</ErrorText> : null}
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <SmallButton label={t('cancel')} style={{ flex: 1, minHeight: 60, borderColor: colors.inputBorder }} onPress={onClose} />
-            <SmallButton label={t('saveRound')} tone="primary" style={{ flex: 1.4, minHeight: 60 }} onPress={save} />
+            <SmallButton label={single ? t('savePoints') : t('saveRound')} tone="primary" style={{ flex: 1.4, minHeight: 60 }} onPress={save} />
           </View>
         </View>
       </KeyboardAvoidingView>

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, deleteDoc, doc, getDoc, getDocFromServer, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocFromServer, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -8,7 +8,8 @@ import { deleteByUrl, uploadFile } from '@/firebase/storage';
 import type { Lang } from '@/i18n';
 import { TINTS } from '@/ui/theme';
 import { newCodeKey, parseCode, wordsFor } from './codes';
-import { standings, winnersOf } from './game';
+import { lookupTitle, parseSpotifyTrack } from './songs';
+import { settle, standings, winnersOf } from './live';
 import type { LiveGame, Member, SavedGame, Session } from './types';
 
 /**
@@ -36,6 +37,9 @@ export type FamilyStore = {
   checkCode: (code: string) => Promise<boolean>;
   /** Sets or changes this person's selfie (uploads it). Throws if it could not be saved. */
   setMyPhoto: (localUri: string) => Promise<void>;
+  /** Sets this person's victory song from a pasted Spotify link. Returns 'invalid' when it is not a song link. Throws if it could not be saved. */
+  setMySong: (link: string) => Promise<'saved' | 'invalid'>;
+  clearMySong: () => Promise<void>;
   /** For a person waiting to be let in: asks the server right now. 'missing' means the request is gone. */
   refreshRequest: () => Promise<'approved' | 'waiting' | 'declined' | 'missing'>;
   approveMember: (uid: string) => Promise<void>;
@@ -226,6 +230,22 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     await deleteByUrl([old]);
   }, []);
 
+  const setMySong = useCallback<FamilyStore['setMySong']>(async (link) => {
+    const { familyId, uid } = baseRef.current;
+    if (!familyId || !uid) throw new Error('Not in a family');
+    const songId = parseSpotifyTrack(link);
+    if (!songId) return 'invalid';
+    const songTitle = (await lookupTitle(songId)) ?? '';
+    await updateDoc(doc(db, 'families', familyId, 'members', uid), { songId, songTitle });
+    return 'saved';
+  }, []);
+
+  const clearMySong = useCallback<FamilyStore['clearMySong']>(async () => {
+    const { familyId, uid } = baseRef.current;
+    if (!familyId || !uid) throw new Error('Not in a family');
+    await updateDoc(doc(db, 'families', familyId, 'members', uid), { songId: deleteField(), songTitle: deleteField() });
+  }, []);
+
   const refreshRequest = useCallback<FamilyStore['refreshRequest']>(async () => {
     const { familyId, uid } = baseRef.current;
     if (!familyId || !uid) return 'missing';
@@ -325,7 +345,9 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     await batch.commit();
   }, []);
 
-  const saveGame = useCallback<FamilyStore['saveGame']>(async (g) => {
+  const saveGame = useCallback<FamilyStore['saveGame']>(async (liveGame) => {
+    // A round still being built one player at a time is closed off as its own round.
+    const g = settle(liveGame);
     const { familyId, uid } = baseRef.current;
     if (!familyId || !uid) throw new Error('Not in a family');
     await ensureSignedIn();
@@ -391,6 +413,8 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
       joinFamily,
       checkCode: async (code) => !!(await lookupCode(code)),
       setMyPhoto,
+      setMySong,
+      clearMySong,
       refreshRequest,
       approveMember,
       declineMember,
@@ -402,7 +426,7 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
       deleteGame,
       signOut: () => setBase(emptyBase),
     };
-  }, [base, family, rawMembers, selfDoc, ready, members, pendingMembers, createFamily, joinFamily, lookupCode, setMyPhoto, refreshRequest, approveMember, declineMember, makeAdmin, removeMember, newCode, games, saveGame, deleteGame, setBase]);
+  }, [base, family, rawMembers, selfDoc, ready, members, pendingMembers, createFamily, joinFamily, lookupCode, setMyPhoto, setMySong, clearMySong, refreshRequest, approveMember, declineMember, makeAdmin, removeMember, newCode, games, saveGame, deleteGame, setBase]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

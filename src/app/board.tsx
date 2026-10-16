@@ -113,7 +113,7 @@ export default function Board() {
             })
           : null}
       </View>
-      <RoundEntry visible={entering} onClose={() => setEntering(false)} focusUid={focusUid} />
+      <RoundEntry visible={entering} onClose={() => setEntering(false)} onlyUid={focusUid} />
     </SafeAreaView>
   );
 }

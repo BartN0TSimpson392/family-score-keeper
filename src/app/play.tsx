@@ -4,6 +4,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { dealerFor, personName, serverFor, standings, useGame } from '@/data/game';
+import { songFor, playTrack } from '@/data/songs';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, BigButton, ErrorText, SmallButton } from '@/ui/components';
@@ -20,9 +21,10 @@ export default function Play() {
   const router = useRouter();
   const { t } = useI18n();
   const { game, addRound, undo, endGame } = useGame();
-  const { saveGame } = useFamily();
+  const { saveGame, members } = useFamily();
   const [saving, setSaving] = useState(false);
   const [entering, setEntering] = useState(false);
+  const [entryFor, setEntryFor] = useState<string | null>(null);
   const win = useWindowDimensions();
   const sideways = win.width > win.height;
 
@@ -39,6 +41,7 @@ export default function Play() {
   const losers = game.players.filter((p) => loserUids.includes(p.uid));
   const winners = game.players.filter((p) => winnerUids.includes(p.uid));
   const roundNo = game.rounds.length + 1;
+  const songId = winners.length > 0 ? songFor(game, winnerUids, members) : null;
   const isTap = game.scorer === 'tap';
   const serverUid = serverFor(game);
 
@@ -51,7 +54,15 @@ export default function Play() {
   const dealerName = personName(game, dealerUid);
   const lastRound = game.rounds[game.rounds.length - 1];
 
-  const openEntry = () => setEntering(true);
+  const openEntry = () => {
+    setEntryFor(null);
+    setEntering(true);
+  };
+  // Tapping a player's card types points for just that player.
+  const openFor = (uid: string) => {
+    setEntryFor(uid);
+    setEntering(true);
+  };
 
   const saveAndLeave = async () => {
     if (saving) return;
@@ -74,7 +85,7 @@ export default function Play() {
   };
 
   const confirmEnd = () => {
-    if (game.rounds.length === 0) {
+    if (game.rounds.length === 0 && Object.keys(game.pending ?? {}).length === 0) {
       Alert.alert(t('endGameH'), t('noPointsYet'), [
         { text: t('cancel'), style: 'cancel' },
         { text: t('discardGame'), style: 'destructive', onPress: discard },
@@ -136,6 +147,7 @@ export default function Play() {
         {winners.length > 0 ? (
           <View style={styles.winner} accessibilityRole="alert">
             <Text style={styles.winnerText}>🏆 {t('winnerBanner', { name: winners.map((w) => w.name).join(' & ') })}</Text>
+            {songId ? <SmallButton label={`🎵 ${t('playSong')}`} style={{ minHeight: 48, marginTop: 6 }} onPress={() => void playTrack(songId)} /> : null}
             <Text style={styles.winnerSub}>{losers.length > 0 ? t('penaltyLoser', { name: losers.map((l) => l.name).join(' & ') }) : t('keepPlaying')}</Text>
           </View>
         ) : null}
@@ -149,9 +161,10 @@ export default function Play() {
           const isLeader = leaders.includes(p.uid);
           const isWinner = winnerUids.includes(p.uid);
           const isLoser = loserUids.includes(p.uid);
-          const change = lastRound ? lastRound.points[p.uid] ?? 0 : null;
+          const entered = game.pending && p.uid in game.pending ? game.pending[p.uid] : null;
+          const change = entered !== null ? entered : lastRound ? lastRound.points[p.uid] ?? 0 : null;
           return (
-            <View key={p.uid} style={[styles.card, isLeader && styles.cardLead, isWinner && styles.cardWin]}>
+            <Pressable key={p.uid} onPress={() => openFor(p.uid)} accessibilityRole="button" accessibilityLabel={`${p.name}: ${scores[p.uid]}`} style={[styles.card, isLeader && styles.cardLead, isWinner && styles.cardWin]}>
               <View style={styles.cardTop}>
                 <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={52} />
                 <View style={{ flex: 1 }}>
@@ -159,17 +172,17 @@ export default function Play() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.score} adjustsFontSizeToFit numberOfLines={1} accessibilityLabel={`${p.name}: ${scores[p.uid]}`}>{scores[p.uid]}</Text>
-                  {change !== null ? <Text style={styles.change}>{sign(change)}</Text> : null}
+                  {change !== null ? <Text style={[styles.change, entered !== null && { color: colors.primary }]}>{sign(change)}</Text> : null}
                 </View>
               </View>
-            </View>
+            </Pressable>
           );
         })}
 
-        {game.rounds.length > 0 ? (
+        {game.rounds.length > 0 || Object.keys(game.pending ?? {}).length > 0 ? (
           <View style={{ gap: 8, marginTop: 4 }}>
             <Text style={styles.sectionLabel}>{t('roundsH')}</Text>
-            <RoundsTable players={game.players} rounds={game.rounds} totals={scores} start={game.start} />
+            <RoundsTable players={game.players} rounds={game.rounds} totals={scores} start={game.start} pending={game.pending} />
           </View>
         ) : (
           <Text style={styles.empty}>{t('noRoundsYet')}</Text>
@@ -180,12 +193,12 @@ export default function Play() {
       <View style={styles.bottom}>
         {isTap ? null : <BigButton label={t('addRound')} height={64} onPress={openEntry} />}
         <View style={{ flexDirection: 'row', gap: 12 }}>
-          <SmallButton label={t('undo')} style={{ flex: 1, minHeight: 56, opacity: game.rounds.length ? 1 : 0.4 }} onPress={() => game.rounds.length && undo()} />
+          <SmallButton label={t('undo')} style={{ flex: 1, minHeight: 56, opacity: game.rounds.length || Object.keys(game.pending ?? {}).length ? 1 : 0.4 }} onPress={() => undo()} />
           <BigButton label={saving ? t('working') : t('endGame')} tone="outline" height={56} disabled={saving} style={{ flex: 1 }} onPress={confirmEnd} />
         </View>
       </View>
 
-      <RoundEntry visible={entering} onClose={() => setEntering(false)} />
+      <RoundEntry visible={entering} onClose={() => setEntering(false)} onlyUid={entryFor} />
     </SafeAreaView>
   );
 }

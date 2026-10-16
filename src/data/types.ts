@@ -10,6 +10,9 @@ export type Member = {
   pending?: boolean;
   /** Set when an admin removed this person. They lose access right away. */
   removed?: boolean;
+  /** Spotify track chosen as this person's victory song. */
+  songId?: string;
+  songTitle?: string;
 };
 
 export type Session = {
@@ -40,7 +43,7 @@ export type LiveMember = { uid: string; name: string; tint: string; photoUri?: s
 export type LivePlayer = { uid: string; name: string; tint: string; photoUri?: string; members?: LiveMember[] };
 
 /** One round of play: how much each player's score changed. A player left out had no change. The scores are always worked out from the list of rounds, so Undo is just removing the last one. */
-export type Round = { points: Record<string, number>; at: number };
+export type Round = { id?: string; points: Record<string, number>; at: number };
 
 export type LiveGame = {
   id: string;
@@ -72,6 +75,11 @@ export type LiveGame = {
   /** Who deals in round 1. The deal then moves to the next player in the list every round. */
   firstDealerUid: string | null;
   rounds: Round[];
+  /** A round being built one player at a time (tap a player's score and type their points). It becomes a real round once every player has an entry. */
+  pending?: Record<string, number>;
+  /** Who started the game. The game is shared with the whole family. */
+  createdByUid?: string;
+  createdByName?: string;
 };
 
 /* ---------- A finished game, saved for the whole family ---------- */

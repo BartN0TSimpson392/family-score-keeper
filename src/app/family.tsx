@@ -1,6 +1,7 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { playTrack } from '@/data/songs';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, Body, H1, LanguageToggle, Screen, SmallButton, TopBar } from '@/ui/components';
@@ -10,10 +11,13 @@ import { colors } from '@/ui/theme';
 export default function Family() {
   const router = useRouter();
   const { t, plural, lang } = useI18n();
-  const { session, setMyPhoto, pendingMembers, approveMember, declineMember, members, codeFor, signOut, creatorUid, makeAdmin, removeMember } = useFamily();
+  const { session, setMyPhoto, setMySong, clearMySong, pendingMembers, approveMember, declineMember, members, codeFor, signOut, creatorUid, makeAdmin, removeMember } = useFamily();
   const [photoError, setPhotoError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState(false);
+  const [songText, setSongText] = useState('');
+  const [songMsg, setSongMsg] = useState<'' | 'saved' | 'invalid' | 'failed'>('');
+  const [songBusy, setSongBusy] = useState(false);
   if (!session.signedIn) return <Redirect href="/welcome" />;
   if (session.pending) return <Redirect href="/waiting" />;
 
@@ -107,6 +111,56 @@ export default function Family() {
           {photoError ? <Text style={[styles.note, { color: colors.danger }]}>{t('myPhotoFailed')}</Text> : null}
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>🎵 {t('songH')}</Text>
+          <Text style={styles.note}>
+            {members.find((m) => m.id === session.uid)?.songId
+              ? t('songOf', { title: members.find((m) => m.id === session.uid)?.songTitle || 'Spotify' })
+              : t('songNone')}
+          </Text>
+          <Text style={styles.note}>{t('songHelp')}</Text>
+          <TextInput
+            value={songText}
+            onChangeText={(v) => {
+              setSongText(v);
+              setSongMsg('');
+            }}
+            placeholder={t('songPlaceholder')}
+            placeholderTextColor={colors.soft}
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel={t('songPlaceholder')}
+            style={styles.songInput}
+          />
+          {songMsg === 'invalid' ? <Text style={[styles.note, { color: colors.danger }]}>{t('songBad')}</Text> : null}
+          {songMsg === 'failed' ? <Text style={[styles.note, { color: colors.danger }]}>{t('songFailed')}</Text> : null}
+          {songMsg === 'saved' ? <Text style={[styles.note, { color: colors.teal }]}>{t('songSaved')}</Text> : null}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <SmallButton
+              label={songBusy ? t('working') : t('songSave')}
+              tone="primary"
+              style={{ flex: 1.4, minHeight: 52 }}
+              onPress={() => {
+                if (songBusy || !songText.trim()) return;
+                setSongBusy(true);
+                setMySong(songText)
+                  .then((r) => {
+                    setSongMsg(r);
+                    if (r === 'saved') setSongText('');
+                  })
+                  .catch(() => setSongMsg('failed'))
+                  .finally(() => setSongBusy(false));
+              }}
+            />
+            {members.find((m) => m.id === session.uid)?.songId ? (
+              <>
+                <SmallButton label={t('songTest')} style={{ flex: 1, minHeight: 52 }} onPress={() => void playTrack(members.find((m) => m.id === session.uid)?.songId ?? '')} />
+                <SmallButton label={t('songClear')} style={{ flex: 1, minHeight: 52, borderColor: colors.danger }} onPress={() => clearMySong().catch(() => setSongMsg('failed'))} />
+              </>
+            ) : null}
+          </View>
+        </View>
+
         <Text style={styles.section}>{t('membersH')}</Text>
         <View style={{ gap: 8 }}>
           {members.map((m) => {
@@ -140,6 +194,7 @@ export default function Family() {
 }
 
 const styles = StyleSheet.create({
+  songInput: { height: 56, borderWidth: 2, borderColor: colors.inputBorder, borderRadius: 14, backgroundColor: colors.input, paddingHorizontal: 14, fontSize: 18, color: colors.ink },
   pending: { gap: 10, padding: 16, borderRadius: 18, backgroundColor: colors.primaryTint, borderWidth: 2, borderColor: colors.primary },
   pendingHead: { fontWeight: '800', fontSize: 23, lineHeight: 30, color: colors.primaryShadow },
   pendingCard: { gap: 12, padding: 12, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border },

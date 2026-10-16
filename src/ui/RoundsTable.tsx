@@ -15,6 +15,7 @@ export function RoundsTable({
   rounds,
   totals,
   start = 0,
+  pending,
 }: {
   players: P[];
   rounds: { points: Record<string, number> }[];
@@ -22,6 +23,8 @@ export function RoundsTable({
   totals: Record<string, number>;
   /** Where everyone started. Shown as its own row when it is not zero. */
   start?: number;
+  /** A round being built one player at a time. Shown as a last, dimmer row; players who have not entered yet show a dash. */
+  pending?: Record<string, number>;
 }) {
   const { t } = useI18n();
   const wide = players.length > 4;
@@ -57,6 +60,14 @@ export function RoundsTable({
           })}
         </View>
       ))}
+      {pending && Object.keys(pending).length > 0 ? (
+        <View style={[styles.row, styles.zebra]}>
+          <Text style={[styles.cell, styles.muted, firstCol]}>{rounds.length + 1}</Text>
+          {players.map((p) => (
+            <Text key={p.uid} style={[styles.cell, colStyle, styles.muted]}>{p.uid in pending ? sign(pending[p.uid]) : '…'}</Text>
+          ))}
+        </View>
+      ) : null}
       <View style={[styles.row, styles.total]}>
         <Text style={[styles.cell, styles.totalText, firstCol]} numberOfLines={1} adjustsFontSizeToFit>{t('totalLabel')}</Text>
         {players.map((p) => (
