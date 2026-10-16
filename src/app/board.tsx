@@ -1,11 +1,13 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Redirect, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import * as Haptics from 'expo-haptics';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dealerFor, personName, serverFor, standings, useGame } from '@/data/game';
 import { useI18n } from '@/i18n';
+import { RoundEntry } from '@/ui/RoundEntry';
 import { SideAvatar } from '@/ui/SideAvatar';
 import { targetLine } from '@/ui/targetLine';
 
@@ -18,7 +20,9 @@ const BOTTOM = 14;
 export default function Board() {
   const router = useRouter();
   const { t } = useI18n();
-  const { game } = useGame();
+  const { game, addRound } = useGame();
+  const [entering, setEntering] = useState(false);
+  const [focusUid, setFocusUid] = useState<string | null>(null);
   // The room is measured from the window itself, so it is right the moment the phone turns sideways.
   const win = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -27,7 +31,8 @@ export default function Board() {
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
     return () => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      // Back on the game screen, which turns with the phone.
+      ScreenOrientation.unlockAsync().catch(() => {});
     };
   }, []);
 
@@ -40,6 +45,17 @@ export default function Board() {
   const lastRound = game.scorer === 'tap' ? undefined : game.rounds[game.rounds.length - 1];
   const serverUid = serverFor(game);
   const n = game.players.length;
+
+  // Tapping a card adds to the next round: one point in tap games, otherwise the round box opens on that player.
+  const tapCard = (uid: string) => {
+    if (game.scorer === 'tap') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      addRound({ [uid]: 1 });
+      return;
+    }
+    setFocusUid(uid);
+    setEntering(true);
+  };
   const boxW = Math.max(0, win.width - insets.left - insets.right - SIDE * 2);
   const boxH = Math.max(0, win.height - insets.top - insets.bottom - HEADER_H - BOTTOM);
   const rows = n <= 4 ? 1 : 2;
@@ -63,7 +79,13 @@ export default function Board() {
               const isWin = winnerUids.includes(p.uid);
               const isLead = leaders.includes(p.uid);
               return (
-                <View key={p.uid} style={[styles.card, { width: cardW, height: cardH }, isLead && styles.lead, isWin && styles.win]}>
+                <Pressable
+                  key={p.uid}
+                  onPress={() => tapCard(p.uid)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p.name}: ${scores[p.uid]}`}
+                  style={[styles.card, { width: cardW, height: cardH }, isLead && styles.lead, isWin && styles.win]}
+                >
                   <View style={styles.who}>
                     <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={Math.min(64, Math.max(32, cardH * 0.2))} />
                     <Text style={[styles.name, { fontSize: Math.min(34, Math.max(18, cardH * 0.11)) }]} numberOfLines={1}>
@@ -86,11 +108,12 @@ export default function Board() {
                   >
                     {scores[p.uid]}
                   </Text>
-                </View>
+                </Pressable>
               );
             })
           : null}
       </View>
+      <RoundEntry visible={entering} onClose={() => setEntering(false)} focusUid={focusUid} />
     </SafeAreaView>
   );
 }
