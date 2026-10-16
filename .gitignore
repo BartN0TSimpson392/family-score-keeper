@@ -146,3 +146,6 @@ functions/lib/
 functions/node_modules/
 *.log
 _to_delete/
+
+# local iOS builds
+*.ipa

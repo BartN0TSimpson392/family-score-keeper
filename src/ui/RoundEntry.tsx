@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInput as TextInputType } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type TextInput as TextInputType } from 'react-native';
 import { dealerFor, personName, useGame } from '@/data/game';
 import { useI18n } from '@/i18n';
 import { ErrorText, SmallButton } from '@/ui/components';
@@ -19,6 +19,8 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
   const [error, setError] = useState('');
   /** One-player entry: the number keyboard has no minus key, so a button flips the sign. */
   const [negative, setNegative] = useState(false);
+  const { width: winW, height: winH } = useWindowDimensions();
+  const landscape = winW > winH;
   const inputs = useRef<Record<string, TextInputType | null>>({});
 
   // Every time the box opens it starts empty.
@@ -86,44 +88,67 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
   const orientations = ['portrait', 'landscape'] as const;
 
   // Tapping one player: just a small box with their name and the number keyboard.
+  // Save sits on the same row as the number, so the keyboard can never cover it.
   if (single) {
+    const saveBtn = <SmallButton label={t('savePoints')} tone="primary" style={{ minHeight: 68, paddingHorizontal: 18 }} onPress={save} />;
+    const signBtn = (
+      <Pressable
+        onPress={() => setNegative((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={negative ? '−' : '+'}
+        style={[styles.signBtn, negative && { backgroundColor: colors.danger, borderColor: colors.danger }]}
+      >
+        <Text style={[styles.signText, negative && { color: colors.cream }]}>{negative ? '−' : '+'}</Text>
+      </Pressable>
+    );
+    const field = (
+      <TextInput
+        value={texts[single.uid] ?? ''}
+        onChangeText={(v) => {
+          setTexts((prev) => ({ ...prev, [single.uid]: v.replace(/[^0-9]/g, '') }));
+          setError('');
+        }}
+        keyboardType="number-pad"
+        placeholder="0"
+        placeholderTextColor={colors.soft}
+        autoFocus
+        maxLength={6}
+        selectTextOnFocus
+        returnKeyType="done"
+        onSubmitEditing={save}
+        style={[styles.entryInput, { flex: 1, minWidth: 90, width: undefined, height: 68, fontSize: 34 }]}
+        accessibilityLabel={single.name}
+      />
+    );
+    const who = (
+      <View style={[styles.entryRow, landscape && { flex: 1 }]}>
+        <SideAvatar name={single.name} tint={single.tint} photoUri={single.photoUri} members={single.members} size={landscape ? 44 : 40} />
+        <Text style={styles.entryName} numberOfLines={1}>{single.name}</Text>
+      </View>
+    );
     return (
       <Modal visible={visible} transparent animationType="fade" supportedOrientations={[...orientations]} onRequestClose={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.quickBack}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.quickBack, landscape && { paddingTop: 8 }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('cancel')} />
-          <View style={styles.quickCard}>
-            <View style={styles.entryRow}>
-              <SideAvatar name={single.name} tint={single.tint} photoUri={single.photoUri} members={single.members} size={40} />
-              <Text style={styles.entryName} numberOfLines={1}>{single.name}</Text>
+          {landscape ? (
+            <View style={[styles.quickCard, { maxWidth: 760, flexDirection: 'row', alignItems: 'center', padding: 12 }]}>
+              {who}
+              {signBtn}
+              <View style={{ width: 180 }}>{field}</View>
+              {saveBtn}
             </View>
-            <View style={styles.entryRow}>
-              <Pressable
-                onPress={() => setNegative((v) => !v)}
-                accessibilityRole="button"
-                accessibilityLabel={negative ? '−' : '+'}
-                style={[styles.signBtn, negative && { backgroundColor: colors.danger, borderColor: colors.danger }]}
-              >
-                <Text style={[styles.signText, negative && { color: colors.cream }]}>{negative ? '−' : '+'}</Text>
-              </Pressable>
-              <TextInput
-                value={texts[single.uid] ?? ''}
-                onChangeText={(v) => {
-                  setTexts((prev) => ({ ...prev, [single.uid]: v.replace(/[^0-9]/g, '') }));
-                  setError('');
-                }}
-                keyboardType="number-pad"
-                placeholder="0"
-                placeholderTextColor={colors.soft}
-                autoFocus
-                maxLength={6}
-                selectTextOnFocus
-                style={[styles.entryInput, { flex: 1, width: undefined, height: 68, fontSize: 34 }]}
-                accessibilityLabel={single.name}
-              />
+          ) : (
+            <View style={styles.quickCard}>
+              {who}
+              <View style={styles.entryRow}>
+                {signBtn}
+                {field}
+                {saveBtn}
+              </View>
+              {error ? <ErrorText>{error}</ErrorText> : null}
             </View>
-            {error ? <ErrorText>{error}</ErrorText> : null}
-            <SmallButton label={t('savePoints')} tone="primary" style={{ minHeight: 60 }} onPress={save} />
-          </View>
+          )}
+          {landscape && error ? <ErrorText>{error}</ErrorText> : null}
         </KeyboardAvoidingView>
       </Modal>
     );
