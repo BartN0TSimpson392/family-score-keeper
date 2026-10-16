@@ -133,10 +133,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const g = legacy.current;
     if (!g || !ready || !liveReady || !fid) return;
     legacy.current = null;
-    AsyncStorage.removeItem(LIVE_KEY).catch(() => {});
-    if (live.some((x) => x.id === g.id)) return;
+    // The copy on this phone is only deleted once the online copy is saved, so a problem never loses the game.
+    if (live.some((x) => x.id === g.id)) {
+      AsyncStorage.removeItem(LIVE_KEY).catch(() => {});
+      return;
+    }
     const { id, ...rest } = { ...g, createdByUid: g.createdByUid ?? myUid, createdByName: g.createdByName ?? myName };
-    setDoc(doc(db, 'families', fid, 'liveGames', id), rest).catch(warn('Could not move the game online'));
+    setDoc(doc(db, 'families', fid, 'liveGames', id), rest)
+      .then(() => AsyncStorage.removeItem(LIVE_KEY).catch(() => {}))
+      .catch(warn('Could not move the game online'));
     pick(id);
   }, [ready, liveReady, fid, live, myUid, myName, pick]);
 

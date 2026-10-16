@@ -42,6 +42,14 @@
           "cameraPermission": "Family Score Keeper uses the camera so you can take a selfie that shows your family who you are.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
       ]
     ],
     "backgroundColor": "#1F2A44",

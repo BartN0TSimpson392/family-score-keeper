@@ -17,6 +17,8 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [bags, setBags] = useState<Record<string, { hole: number; board: number }>>({});
   const [error, setError] = useState('');
+  /** One-player entry: the number keyboard has no minus key, so a button flips the sign. */
+  const [negative, setNegative] = useState(false);
   const inputs = useRef<Record<string, TextInputType | null>>({});
 
   // Every time the box opens it starts empty.
@@ -25,6 +27,13 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
       // Points already typed for this round (by anyone) are shown, so they can be fixed.
       const start: Record<string, string> = {};
       for (const [uid, v] of Object.entries(game?.pending ?? {})) start[uid] = String(game?.mode === 'down' ? -v : v);
+      // For one player, the sign is its own button and the field holds only digits.
+      if (onlyUid && start[onlyUid] !== undefined) {
+        setNegative(start[onlyUid].startsWith('-'));
+        start[onlyUid] = start[onlyUid].replace('-', '');
+      } else {
+        setNegative(false);
+      }
       setTexts(start);
       setBags({});
       setError('');
@@ -37,13 +46,14 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
   const roundNo = game.rounds.length + 1;
   const dealerName = personName(game, dealerFor(game, game.rounds.length));
   const shown = onlyUid ? game.players.filter((p) => p.uid === onlyUid) : game.players;
-  const single = shown.length === 1 && game.players.length > 1 ? shown[0] : null;
+  const single = onlyUid && shown.length === 1 && game.scorer !== 'cornhole' ? shown[0] : undefined;
   const firstUid = shown[0]?.uid;
 
   const save = () => {
     const points: Record<string, number> = {};
     for (const p of shown) {
-      const raw = (texts[p.uid] ?? '').trim().replace('−', '-');
+      const typed = (texts[p.uid] ?? '').trim().replace('−', '-');
+      const raw = single && typed !== '' && negative ? `-${typed}` : typed;
       if (raw !== '' && !/^-?\d{1,6}$/.test(raw)) return setError(t('badPoints'));
       const v = raw === '' ? 0 : parseInt(raw, 10);
       // Counting down, you type the points someone scored and they come off the score.
@@ -74,6 +84,50 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
 
   // Modals default to portrait only on iPhone, so say that sideways is fine too.
   const orientations = ['portrait', 'landscape'] as const;
+
+  // Tapping one player: just a small box with their name and the number keyboard.
+  if (single) {
+    return (
+      <Modal visible={visible} transparent animationType="fade" supportedOrientations={[...orientations]} onRequestClose={onClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.quickBack}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('cancel')} />
+          <View style={styles.quickCard}>
+            <View style={styles.entryRow}>
+              <SideAvatar name={single.name} tint={single.tint} photoUri={single.photoUri} members={single.members} size={40} />
+              <Text style={styles.entryName} numberOfLines={1}>{single.name}</Text>
+            </View>
+            <View style={styles.entryRow}>
+              <Pressable
+                onPress={() => setNegative((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={negative ? '−' : '+'}
+                style={[styles.signBtn, negative && { backgroundColor: colors.danger, borderColor: colors.danger }]}
+              >
+                <Text style={[styles.signText, negative && { color: colors.cream }]}>{negative ? '−' : '+'}</Text>
+              </Pressable>
+              <TextInput
+                value={texts[single.uid] ?? ''}
+                onChangeText={(v) => {
+                  setTexts((prev) => ({ ...prev, [single.uid]: v.replace(/[^0-9]/g, '') }));
+                  setError('');
+                }}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={colors.soft}
+                autoFocus
+                maxLength={6}
+                selectTextOnFocus
+                style={[styles.entryInput, { flex: 1, width: undefined, height: 68, fontSize: 34 }]}
+                accessibilityLabel={single.name}
+              />
+            </View>
+            {error ? <ErrorText>{error}</ErrorText> : null}
+            <SmallButton label={t('savePoints')} tone="primary" style={{ minHeight: 60 }} onPress={save} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    );
+  }
 
   if (isCorn) {
     return (
@@ -110,10 +164,9 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
     <Modal visible={visible} transparent animationType="fade" supportedOrientations={[...orientations]} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalBack}>
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{single ? t('pointsFor', { name: single.name }) : t('roundTitle', { n: roundNo })}</Text>
-          {single ? <Text style={styles.dealerText}>{t('roundTitle', { n: roundNo })}</Text> : null}
+          <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
           {dealerName ? <Text style={styles.dealerText}>🃏 {t('dealsNow', { name: dealerName })}</Text> : null}
-          <Text style={styles.help}>{single ? (game.mode === 'up' ? t('roundHelpOne') : t('roundHelpOneDown')) : game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>
+          <Text style={styles.help}>{game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
             {shown.map((p) => (
               <View key={p.uid} style={styles.entryRow}>
@@ -166,6 +219,10 @@ function Stepper({ label, value, onChange }: { label: string; value: number; onC
 }
 
 const styles = StyleSheet.create({
+  quickBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 70, paddingHorizontal: 16 },
+  quickCard: { width: '100%', maxWidth: 420, gap: 12, padding: 16, borderRadius: 20, backgroundColor: colors.paper },
+  signBtn: { width: 60, height: 68, borderRadius: 14, borderWidth: 2.5, borderColor: colors.teal, alignItems: 'center', justifyContent: 'center' },
+  signText: { fontWeight: '800', fontSize: 34, lineHeight: 38, color: colors.teal },
   modalBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start', paddingTop: 24, paddingHorizontal: 16 },
   modalCard: { maxHeight: '96%', gap: 12, padding: 18, borderRadius: 20, backgroundColor: colors.paper, alignSelf: 'center', width: '100%', maxWidth: 560 },
   modalTitle: { fontWeight: '800', fontSize: 24, color: colors.ink },
