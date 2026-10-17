@@ -4,7 +4,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { dealerFor, personName, serverFor, standings, useGame } from '@/data/game';
-import { songFor, playTrack } from '@/data/songs';
+import { songFor } from '@/data/songs';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, BigButton, ErrorText, SmallButton } from '@/ui/components';
@@ -147,7 +147,7 @@ export default function Play() {
         {winners.length > 0 ? (
           <View style={styles.winner} accessibilityRole="alert">
             <Text style={styles.winnerText}>🏆 {t('winnerBanner', { name: winners.map((w) => w.name).join(' & ') })}</Text>
-            {songId ? <SmallButton label={`🎵 ${t('playSong')}`} style={{ minHeight: 48, marginTop: 6 }} onPress={() => void playTrack(songId)} /> : null}
+            {songId ? <SmallButton label={`🎵 ${t('playSong')}`} style={{ minHeight: 48, marginTop: 6 }} onPress={() => router.push({ pathname: '/victory', params: { id: songId, name: winners.map((w) => w.name).join(' & ') } })} /> : null}
             <Text style={styles.winnerSub}>{losers.length > 0 ? t('penaltyLoser', { name: losers.map((l) => l.name).join(' & ') }) : t('keepPlaying')}</Text>
           </View>
         ) : null}

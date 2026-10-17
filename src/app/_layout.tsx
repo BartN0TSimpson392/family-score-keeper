@@ -25,6 +25,7 @@ function Gate() {
         <Stack.Screen name="home" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="welcome" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="board" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="victory" options={{ animation: 'fade', presentation: 'fullScreenModal' }} />
       </Stack>
     </>
   );

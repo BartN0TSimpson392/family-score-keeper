@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { FieldPath, arrayUnion, collection, deleteDoc, doc, onSnapshot, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { db, ensureSignedIn } from '@/firebase';
-import { playTrack, songFor } from './songs';
+import { songFor } from './songs';
 import { useFamily } from './store';
 import { gameKeyFor, standings, type Rules } from './live';
 import type { LiveGame, LivePlayer, Mode } from './types';
@@ -265,7 +266,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       won.current[game.id] = true;
       if (Date.now() - lastAct.current < 8000) {
         const song = songFor(game, winners, members);
-        if (song) void playTrack(song);
+        if (song) {
+          const name = game.players.filter((p) => winners.includes(p.uid)).map((p) => p.name).join(' & ');
+          router.push({ pathname: '/victory', params: { id: song, name } });
+        }
       }
     }
     if (winners.length === 0) won.current[game.id] = false;

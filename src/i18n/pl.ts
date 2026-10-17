@@ -296,6 +296,8 @@ const pl: Record<string, string> = {
   songFailed: 'Nie udało się zapisać piosenki. Sprawdź internet i spróbuj ponownie.',
   songOf: 'Piosenka: {title}',
   playSong: 'Odtwórz piosenkę zwycięstwa',
+  victoryWins: 'wygrywa!',
+  victoryHint: 'Jeśli piosenka nie ruszy sama, naciśnij odtwarzanie.',
 };
 
 export default pl as unknown as Dict;

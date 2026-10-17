@@ -1,7 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
-import { playTrack } from '@/data/songs';
 import { useFamily } from '@/data/store';
 import { useI18n } from '@/i18n';
 import { Avatar, Body, H1, LanguageToggle, Screen, SmallButton, TopBar } from '@/ui/components';
@@ -154,7 +153,7 @@ export default function Family() {
             />
             {members.find((m) => m.id === session.uid)?.songId ? (
               <>
-                <SmallButton label={t('songTest')} style={{ flex: 1, minHeight: 52 }} onPress={() => void playTrack(members.find((m) => m.id === session.uid)?.songId ?? '')} />
+                <SmallButton label={t('songTest')} style={{ flex: 1, minHeight: 52 }} onPress={() => router.push({ pathname: '/victory', params: { id: members.find((m) => m.id === session.uid)?.songId ?? '' } })} />
                 <SmallButton label={t('songClear')} style={{ flex: 1, minHeight: 52, borderColor: colors.danger }} onPress={() => clearMySong().catch(() => setSongMsg('failed'))} />
               </>
             ) : null}

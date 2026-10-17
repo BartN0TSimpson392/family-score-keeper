@@ -304,6 +304,8 @@ const en = {
   songFailed: 'Could not save the song. Check your internet and try again.',
   songOf: 'Song: {title}',
   playSong: 'Play victory song',
+  victoryWins: 'wins!',
+  victoryHint: 'If the song does not start by itself, tap play.',
 } as const;
 
 export type Dict = Record<keyof typeof en, string>;
