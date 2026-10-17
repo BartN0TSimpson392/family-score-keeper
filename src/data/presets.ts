@@ -38,6 +38,7 @@ const up = (id: string, name: string, cat: Category, target: number | null, side
 export const PRESETS: Preset[] = [
   // Card games
   up('hearts', 'Hearts', 'cards', 100, 'solo', 3, 6, true, true),
+  up('remik', 'Remik', 'cards', 300, 'solo', 2, 6, true, true),
   up('spades', 'Spades', 'cards', 500, 'teams', 4, 4, true),
   up('euchre', 'Euchre', 'cards', 10, 'teams', 4, 4, true),
   up('pinochle', 'Pinochle', 'cards', 150, 'teams', 4, 4, true),
