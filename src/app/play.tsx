@@ -23,6 +23,8 @@ export default function Play() {
   const { game, addRound, undo, endGame } = useGame();
   const { saveGame, members } = useFamily();
   const [saving, setSaving] = useState(false);
+  // Set while leaving the screen, so ending the game does not flash the redirect below.
+  const [leaving, setLeaving] = useState(false);
   const [entering, setEntering] = useState(false);
   const [entryFor, setEntryFor] = useState<string | null>(null);
   const win = useWindowDimensions();
@@ -35,6 +37,7 @@ export default function Play() {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
   }, []);
+  if (leaving) return null;
   if (!game) return <Redirect href="/home" />;
 
   const { scores, winnerUids, loserUids, leaders } = standings(game);
@@ -58,10 +61,20 @@ export default function Play() {
     setEntryFor(null);
     setEntering(true);
   };
-  // Tapping a player's card types points for just that player.
+  // Tapping a player's card opens the same round box as Add round, with that player's field ready.
   const openFor = (uid: string) => {
     setEntryFor(uid);
     setEntering(true);
+  };
+
+  // Turn back to portrait and let that finish before the screen changes, so the rest of the app never lays out mid-turn.
+  const leaveTo = async (href: '/history' | '/home') => {
+    setEntering(false);
+    await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    await new Promise((r) => setTimeout(r, 350));
+    setLeaving(true);
+    router.replace(href);
+    endGame();
   };
 
   const saveAndLeave = async () => {
@@ -69,8 +82,7 @@ export default function Play() {
     setSaving(true);
     try {
       await saveGame(game);
-      endGame();
-      router.replace('/history');
+      await leaveTo('/history');
     } catch (e) {
       console.warn('Could not save the game', (e as { code?: string })?.code ?? e);
       Alert.alert(t('saveFailed'));
@@ -80,8 +92,7 @@ export default function Play() {
   };
 
   const discard = () => {
-    endGame();
-    router.replace('/home');
+    void leaveTo('/home');
   };
 
   const confirmEnd = () => {
@@ -198,7 +209,7 @@ export default function Play() {
         </View>
       </View>
 
-      <RoundEntry visible={entering} onClose={() => setEntering(false)} onlyUid={entryFor} />
+      <RoundEntry visible={entering} onClose={() => setEntering(false)} focusUid={entryFor} />
     </SafeAreaView>
   );
 }

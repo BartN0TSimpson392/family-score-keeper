@@ -12,11 +12,12 @@ import { SideAvatar } from '@/ui/SideAvatar';
 import { targetLine } from '@/ui/targetLine';
 
 const GAP = 12;
-const HEADER_H = 60;
+const HEADER_LANDSCAPE = 60;
+const HEADER_PORTRAIT = 96;
 const SIDE = 20;
 const BOTTOM = 14;
 
-/** Full-screen scoreboard for the whole room. Turns sideways, keeps the screen on, and is read-only. */
+/** Full-screen scoreboard for the whole room. Turns with the phone, keeps the screen on, and tapping a score opens the round box. */
 export default function Board() {
   const router = useRouter();
   const { t } = useI18n();
@@ -29,11 +30,8 @@ export default function Board() {
   useKeepAwake();
 
   useEffect(() => {
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
-    return () => {
-      // Back on the game screen, which turns with the phone.
-      ScreenOrientation.unlockAsync().catch(() => {});
-    };
+    // Follows the phone, portrait or landscape.
+    ScreenOrientation.unlockAsync().catch(() => {});
   }, []);
 
   if (!game) return <Redirect href="/home" />;
@@ -46,7 +44,7 @@ export default function Board() {
   const serverUid = serverFor(game);
   const n = game.players.length;
 
-  // Tapping a card adds to the next round: one point in tap games, otherwise the round box opens on that player.
+  // Tapping a card adds to the next round: one point in tap games, otherwise the same round box as Add round opens, ready on that player.
   const tapCard = (uid: string) => {
     if (game.scorer === 'tap') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -56,18 +54,23 @@ export default function Board() {
     setFocusUid(uid);
     setEntering(true);
   };
+  const portrait = win.height >= win.width;
+  const headerH = portrait ? HEADER_PORTRAIT : HEADER_LANDSCAPE;
   const boxW = Math.max(0, win.width - insets.left - insets.right - SIDE * 2);
-  const boxH = Math.max(0, win.height - insets.top - insets.bottom - HEADER_H - BOTTOM);
-  const rows = n <= 4 ? 1 : 2;
-  const cols = Math.ceil(n / rows);
+  const boxH = Math.max(0, win.height - insets.top - insets.bottom - headerH - BOTTOM);
+  // Landscape: one row of up to 4, then two rows. Portrait: a single column of up to 4, then two columns.
+  const cols = portrait ? (n <= 4 ? 1 : 2) : n <= 4 ? n : Math.ceil(n / 2);
+  const rows = Math.ceil(n / cols);
   const cardW = Math.max(0, Math.floor((boxW - (cols - 1) * GAP) / cols) - 1);
   const cardH = Math.max(0, Math.floor((boxH - (rows - 1) * GAP) / rows) - 1);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.header}>
-        <Text style={styles.title} numberOfLines={1}>{game.gameName}</Text>
-        <Text style={styles.sub}>{targetLine(game, t)}</Text>
+      <View style={[styles.header, { height: headerH }]}>
+        <View style={portrait ? { flex: 1 } : { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <Text style={styles.title} numberOfLines={1}>{game.gameName}</Text>
+          <Text style={[styles.sub, !portrait && { flex: 1 }]} numberOfLines={portrait ? 2 : 1}>{targetLine(game, t)}</Text>
+        </View>
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('close')} style={styles.close} hitSlop={10}>
           <Text style={styles.closeText}>✕ {t('close')}</Text>
         </Pressable>
@@ -113,14 +116,14 @@ export default function Board() {
             })
           : null}
       </View>
-      <RoundEntry visible={entering} onClose={() => setEntering(false)} onlyUid={focusUid} />
+      <RoundEntry visible={entering} onClose={() => setEntering(false)} focusUid={focusUid} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0F1525' },
-  header: { height: HEADER_H, flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: SIDE },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: SIDE },
   title: { flexShrink: 1, fontWeight: '800', fontSize: 28, color: '#FFFFFF' },
   sub: { flex: 1, fontSize: 20, color: '#AEB8D0' },
   close: { minHeight: 44, paddingHorizontal: 14, borderRadius: 22, borderWidth: 2, borderColor: '#AEB8D0', justifyContent: 'center' },

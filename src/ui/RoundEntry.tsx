@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type TextInput as TextInputType } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { dealerFor, personName, useGame } from '@/data/game';
 import { useI18n } from '@/i18n';
 import { ErrorText, SmallButton } from '@/ui/components';
@@ -8,35 +8,44 @@ import { SideAvatar } from '@/ui/SideAvatar';
 import { colors } from '@/ui/theme';
 
 /**
- * The box for adding one round: typed points for each player, or the bag counter for cornhole.
+ * The box for adding one round: typed points for each player (number keyboard, +/− button per player), or the bag counter for cornhole.
  * Used by the Play screen and by the full-screen scoreboard.
  */
-export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; onClose: () => void; /** Enter points for just this player (they go into the next round). Leave out to enter everyone. */ onlyUid?: string | null }) {
+export function RoundEntry({ visible, onClose, focusUid }: { visible: boolean; onClose: () => void; /** The player whose field gets the cursor first (the one whose score was tapped). Everyone is always listed. */ focusUid?: string | null }) {
   const { t } = useI18n();
-  const { game, addRound, enterPoints } = useGame();
+  const { game, addRound } = useGame();
   const [texts, setTexts] = useState<Record<string, string>>({});
+  const [negatives, setNegatives] = useState<Record<string, boolean>>({});
   const [bags, setBags] = useState<Record<string, { hole: number; board: number }>>({});
   const [error, setError] = useState('');
-  /** One-player entry: the number keyboard has no minus key, so a button flips the sign. */
-  const [negative, setNegative] = useState(false);
+  const [keyboardH, setKeyboardH] = useState(0);
   const { width: winW, height: winH } = useWindowDimensions();
   const landscape = winW > winH;
-  const inputs = useRef<Record<string, TextInputType | null>>({});
+
+  // The number keyboard has no minus key, so each field has its own +/− button.
+  // The box is sized to the room above the keyboard, so the fields are never covered.
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow', (e) => setKeyboardH(e.endCoordinates.height));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardH(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Every time the box opens it starts empty.
   useEffect(() => {
     if (visible) {
       // Points already typed for this round (by anyone) are shown, so they can be fixed.
       const start: Record<string, string> = {};
-      for (const [uid, v] of Object.entries(game?.pending ?? {})) start[uid] = String(game?.mode === 'down' ? -v : v);
-      // For one player, the sign is its own button and the field holds only digits.
-      if (onlyUid && start[onlyUid] !== undefined) {
-        setNegative(start[onlyUid].startsWith('-'));
-        start[onlyUid] = start[onlyUid].replace('-', '');
-      } else {
-        setNegative(false);
+      const neg: Record<string, boolean> = {};
+      for (const [uid, v] of Object.entries(game?.pending ?? {})) {
+        const shownValue = game?.mode === 'down' ? -v : v;
+        start[uid] = String(Math.abs(shownValue));
+        neg[uid] = shownValue < 0;
       }
       setTexts(start);
+      setNegatives(neg);
       setBags({});
       setError('');
     }
@@ -47,23 +56,19 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
   const isCorn = game.scorer === 'cornhole' && game.players.length === 2;
   const roundNo = game.rounds.length + 1;
   const dealerName = personName(game, dealerFor(game, game.rounds.length));
-  const shown = onlyUid ? game.players.filter((p) => p.uid === onlyUid) : game.players;
-  const single = onlyUid && shown.length === 1 && game.scorer !== 'cornhole' ? shown[0] : undefined;
-  const firstUid = shown[0]?.uid;
+  const firstUid = game.players.some((p) => p.uid === focusUid) ? focusUid : game.players[0]?.uid;
 
   const save = () => {
     const points: Record<string, number> = {};
-    for (const p of shown) {
-      const typed = (texts[p.uid] ?? '').trim().replace('−', '-');
-      const raw = single && typed !== '' && negative ? `-${typed}` : typed;
-      if (raw !== '' && !/^-?\d{1,6}$/.test(raw)) return setError(t('badPoints'));
-      const v = raw === '' ? 0 : parseInt(raw, 10);
+    for (const p of game.players) {
+      const typed = (texts[p.uid] ?? '').trim();
+      if (typed !== '' && !/^\d{1,6}$/.test(typed)) return setError(t('badPoints'));
+      const v = typed === '' ? 0 : parseInt(typed, 10) * (negatives[p.uid] ? -1 : 1);
       // Counting down, you type the points someone scored and they come off the score.
       points[p.uid] = game.mode === 'down' ? -v || 0 : v;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    if (single) enterPoints(single.uid, points[single.uid]);
-    else addRound(points);
+    addRound(points);
     onClose();
   };
 
@@ -86,73 +91,6 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
 
   // Modals default to portrait only on iPhone, so say that sideways is fine too.
   const orientations = ['portrait', 'landscape'] as const;
-
-  // Tapping one player: just a small box with their name and the number keyboard.
-  // Save sits on the same row as the number, so the keyboard can never cover it.
-  if (single) {
-    const saveBtn = <SmallButton label={t('savePoints')} tone="primary" style={{ minHeight: 68, paddingHorizontal: 18 }} onPress={save} />;
-    const signBtn = (
-      <Pressable
-        onPress={() => setNegative((v) => !v)}
-        accessibilityRole="button"
-        accessibilityLabel={negative ? '−' : '+'}
-        style={[styles.signBtn, negative && { backgroundColor: colors.danger, borderColor: colors.danger }]}
-      >
-        <Text style={[styles.signText, negative && { color: colors.cream }]}>{negative ? '−' : '+'}</Text>
-      </Pressable>
-    );
-    const field = (
-      <TextInput
-        value={texts[single.uid] ?? ''}
-        onChangeText={(v) => {
-          setTexts((prev) => ({ ...prev, [single.uid]: v.replace(/[^0-9]/g, '') }));
-          setError('');
-        }}
-        keyboardType="number-pad"
-        placeholder="0"
-        placeholderTextColor={colors.soft}
-        autoFocus
-        maxLength={6}
-        selectTextOnFocus
-        returnKeyType="done"
-        onSubmitEditing={save}
-        style={[styles.entryInput, { flex: 1, minWidth: 90, width: undefined, height: 68, fontSize: 34 }]}
-        accessibilityLabel={single.name}
-      />
-    );
-    const who = (
-      <View style={[styles.entryRow, landscape && { flex: 1 }]}>
-        <SideAvatar name={single.name} tint={single.tint} photoUri={single.photoUri} members={single.members} size={landscape ? 44 : 40} />
-        <Text style={styles.entryName} numberOfLines={1}>{single.name}</Text>
-      </View>
-    );
-    return (
-      <Modal visible={visible} transparent animationType="fade" supportedOrientations={[...orientations]} onRequestClose={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.quickBack, landscape && { paddingTop: 8 }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('cancel')} />
-          {landscape ? (
-            <View style={[styles.quickCard, { maxWidth: 760, flexDirection: 'row', alignItems: 'center', padding: 12 }]}>
-              {who}
-              {signBtn}
-              <View style={{ width: 180 }}>{field}</View>
-              {saveBtn}
-            </View>
-          ) : (
-            <View style={styles.quickCard}>
-              {who}
-              <View style={styles.entryRow}>
-                {signBtn}
-                {field}
-                {saveBtn}
-              </View>
-              {error ? <ErrorText>{error}</ErrorText> : null}
-            </View>
-          )}
-          {landscape && error ? <ErrorText>{error}</ErrorText> : null}
-        </KeyboardAvoidingView>
-      </Modal>
-    );
-  }
 
   if (isCorn) {
     return (
@@ -185,45 +123,60 @@ export function RoundEntry({ visible, onClose, onlyUid }: { visible: boolean; on
     );
   }
 
+  // The box sits at the top and is never taller than the room left above the keyboard.
+  const topGap = landscape ? 8 : 24;
+  const cardMax = Math.max(160, winH - keyboardH - topGap - 8);
+
   return (
     <Modal visible={visible} transparent animationType="fade" supportedOrientations={[...orientations]} onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalBack}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
-          {dealerName ? <Text style={styles.dealerText}>🃏 {t('dealsNow', { name: dealerName })}</Text> : null}
-          <Text style={styles.help}>{game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>
+      <View style={[styles.modalBack, { paddingTop: topGap }]}>
+        <View style={[styles.modalCard, { maxHeight: cardMax }]}>
+          <View style={styles.titleRow}>
+            <Text style={styles.modalTitle}>{t('roundTitle', { n: roundNo })}</Text>
+            {dealerName ? <Text style={styles.dealerText}>🃏 {t('dealsNow', { name: dealerName })}</Text> : null}
+          </View>
+          {landscape && keyboardH > 0 ? null : <Text style={styles.help}>{game.mode === 'up' ? t('roundHelpUp') : t('roundHelpDown')}</Text>}
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
-            {shown.map((p) => (
-              <View key={p.uid} style={styles.entryRow}>
-                <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={44} />
-                <Text style={styles.entryName} numberOfLines={1}>{p.name}</Text>
-                <TextInput
-                  ref={(el) => {
-                    inputs.current[p.uid] = el;
-                  }}
-                  value={texts[p.uid] ?? ''}
-                  onChangeText={(v) => {
-                    setTexts((prev) => ({ ...prev, [p.uid]: v.replace(/[^0-9\-−]/g, '') }));
-                    setError('');
-                  }}
-                  keyboardType="numbers-and-punctuation"
-                  placeholder="0"
-                  placeholderTextColor={colors.soft}
-                  autoFocus={p.uid === firstUid}
-                  selectTextOnFocus
-                  style={styles.entryInput}
-                  accessibilityLabel={p.name}
-                />
-              </View>
-            ))}
+            {game.players.map((p) => {
+              const neg = !!negatives[p.uid];
+              return (
+                <View key={p.uid} style={styles.entryRow}>
+                  <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={44} />
+                  <Text style={styles.entryName} numberOfLines={1}>{p.name}</Text>
+                  <Pressable
+                    onPress={() => setNegatives((prev) => ({ ...prev, [p.uid]: !prev[p.uid] }))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${p.name} ${neg ? '−' : '+'}`}
+                    style={[styles.signBtn, neg && { backgroundColor: colors.danger, borderColor: colors.danger }]}
+                  >
+                    <Text style={[styles.signText, neg && { color: colors.cream }]}>{neg ? '−' : '+'}</Text>
+                  </Pressable>
+                  <TextInput
+                    value={texts[p.uid] ?? ''}
+                    onChangeText={(v) => {
+                      setTexts((prev) => ({ ...prev, [p.uid]: v.replace(/[^0-9]/g, '') }));
+                      setError('');
+                    }}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor={colors.soft}
+                    autoFocus={p.uid === firstUid}
+                    maxLength={6}
+                    selectTextOnFocus
+                    style={styles.entryInput}
+                    accessibilityLabel={p.name}
+                  />
+                </View>
+              );
+            })}
           </ScrollView>
           {error ? <ErrorText>{error}</ErrorText> : null}
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <SmallButton label={t('cancel')} style={{ flex: 1, minHeight: 60, borderColor: colors.inputBorder }} onPress={onClose} />
-            <SmallButton label={single ? t('savePoints') : t('saveRound')} tone="primary" style={{ flex: 1.4, minHeight: 60 }} onPress={save} />
+            <SmallButton label={t('saveRound')} tone="primary" style={{ flex: 1.4, minHeight: 60 }} onPress={save} />
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -244,9 +197,8 @@ function Stepper({ label, value, onChange }: { label: string; value: number; onC
 }
 
 const styles = StyleSheet.create({
-  quickBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 70, paddingHorizontal: 16 },
-  quickCard: { width: '100%', maxWidth: 420, gap: 12, padding: 16, borderRadius: 20, backgroundColor: colors.paper },
-  signBtn: { width: 60, height: 68, borderRadius: 14, borderWidth: 2.5, borderColor: colors.teal, alignItems: 'center', justifyContent: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' },
+  signBtn: { width: 52, height: 60, borderRadius: 14, borderWidth: 2.5, borderColor: colors.teal, alignItems: 'center', justifyContent: 'center' },
   signText: { fontWeight: '800', fontSize: 34, lineHeight: 38, color: colors.teal },
   modalBack: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start', paddingTop: 24, paddingHorizontal: 16 },
   modalCard: { maxHeight: '96%', gap: 12, padding: 18, borderRadius: 20, backgroundColor: colors.paper, alignSelf: 'center', width: '100%', maxWidth: 560 },
