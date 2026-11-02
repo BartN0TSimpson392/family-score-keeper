@@ -16,6 +16,9 @@ const HEADER_LANDSCAPE = 60;
 const HEADER_PORTRAIT = 96;
 const SIDE = 20;
 const BOTTOM = 14;
+const GOLD = '#F2C94C';
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** Full-screen scoreboard for the whole room. Turns with the phone, keeps the screen on, and tapping a score opens the round box. */
 export default function Board() {
@@ -81,36 +84,69 @@ export default function Board() {
           ? game.players.map((p) => {
               const isWin = winnerUids.includes(p.uid);
               const isLead = leaders.includes(p.uid);
+              const isLose = loserUids.includes(p.uid);
+              // Whoever deals (or serves) gets the gold frame and a badge. Leading and winning are shown by the crown and trophy only.
+              const badge = p.uid === dealerSide ? `🃏 ${dealerLabel}` : p.uid === serverUid ? `🏓 ${t('serving')}` : null;
+              const change = lastRound ? lastRound.points[p.uid] ?? 0 : null;
+              const marker = isWin ? '🏆 ' : isLose ? '💥 ' : isLead ? '👑 ' : '';
+              const compact = cardH < 150;
+              const avatarSize = compact ? clamp(cardH * 0.5, 36, 64) : clamp(Math.min(cardH * 0.4, cardW * 0.38), 40, 104);
+              const nameSize = clamp(cardH * 0.13, 18, 36);
+              const scoreSize = Math.max(36, Math.min(cardH * (compact ? 0.5 : 0.42), cardW * (compact ? 0.3 : 0.4)));
+              const avatar = (
+                <View style={[styles.ring, { borderRadius: avatarSize }, badge ? styles.ringGold : null]}>
+                  <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={avatarSize} />
+                </View>
+              );
+              const name = (
+                <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={1}>{marker}{p.name}</Text>
+              );
+              const score = (
+                <Text
+                  style={[styles.score, { fontSize: scoreSize }, compact && { textAlign: 'left' }]}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.3}
+                  numberOfLines={1}
+                  accessibilityLabel={`${p.name}: ${scores[p.uid]}`}
+                >
+                  {scores[p.uid]}
+                </Text>
+              );
               return (
                 <Pressable
                   key={p.uid}
                   onPress={() => tapCard(p.uid)}
                   accessibilityRole="button"
                   accessibilityLabel={`${p.name}: ${scores[p.uid]}`}
-                  style={[styles.card, { width: cardW, height: cardH }, isLead && styles.lead, isWin && styles.win]}
+                  style={[styles.card, { width: cardW, height: cardH }, badge ? styles.dealer : null]}
                 >
-                  <View style={styles.who}>
-                    <SideAvatar name={p.name} tint={p.tint} photoUri={p.photoUri} members={p.members} size={Math.min(64, Math.max(32, cardH * 0.2))} />
-                    <Text style={[styles.name, { fontSize: Math.min(34, Math.max(18, cardH * 0.11)) }]} numberOfLines={1}>
-                      {isWin ? '🏆 ' : loserUids.includes(p.uid) ? '💥 ' : isLead ? '👑 ' : ''}{p.name}
-                    </Text>
-                  </View>
-                  {p.uid === dealerSide || p.uid === serverUid || lastRound ? (
-
-                    <Text style={[styles.extra, { fontSize: Math.min(24, Math.max(14, cardH * 0.08)) }]} numberOfLines={1}>
-                      {p.uid === dealerSide ? `🃏 ${dealerLabel}   ` : ''}{p.uid === serverUid ? `🏓 ${t('serving')}   ` : ''}
-                      {lastRound ? `${(lastRound.points[p.uid] ?? 0) > 0 ? '+' : (lastRound.points[p.uid] ?? 0) < 0 ? '−' : ''}${Math.abs(lastRound.points[p.uid] ?? 0)}` : ''}
-                    </Text>
+                  {badge ? (
+                    <View style={styles.badge}>
+                      <Text style={[styles.badgeText, { fontSize: clamp(cardH * 0.09, 14, 20) }]} numberOfLines={1}>{badge}</Text>
+                    </View>
                   ) : null}
-                  <Text
-                    style={[styles.score, { fontSize: Math.max(40, Math.min(cardH * 0.5, cardW * 0.5)) }]}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.3}
-                    numberOfLines={1}
-                    accessibilityLabel={`${p.name}: ${scores[p.uid]}`}
-                  >
-                    {scores[p.uid]}
-                  </Text>
+                  {change !== null ? (
+                    <View style={styles.chip}>
+                      <Text style={[styles.chipText, { fontSize: clamp(cardH * 0.09, 14, 20) }]}>{change > 0 ? '+' : change < 0 ? '−' : ''}{Math.abs(change)}</Text>
+                    </View>
+                  ) : null}
+                  {compact ? (
+                    <View style={styles.compactRow}>
+                      {avatar}
+                      <View style={{ flex: 1 }}>
+                        {name}
+                        {score}
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.who}>
+                        {avatar}
+                        {name}
+                      </View>
+                      {score}
+                    </>
+                  )}
                 </Pressable>
               );
             })
@@ -130,10 +166,15 @@ const styles = StyleSheet.create({
   closeText: { fontWeight: '700', fontSize: 18, color: '#FFFFFF' },
   area: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignContent: 'flex-start', gap: GAP, paddingHorizontal: SIDE, paddingBottom: BOTTOM },
   card: { borderRadius: 24, backgroundColor: '#1B2440', borderWidth: 4, borderColor: '#1B2440', paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'space-between' },
-  lead: { borderColor: '#5BD1B0' },
-  win: { borderColor: '#F2C94C', backgroundColor: '#2B2A18' },
-  who: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { flex: 1, fontWeight: '700', color: '#FFFFFF' },
-  extra: { fontWeight: '700', color: '#AEB8D0' },
-  score: { textAlign: 'center', fontWeight: '800', color: '#FFFFFF' },
+  dealer: { borderColor: GOLD, backgroundColor: '#2B2A18' },
+  who: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: 64 },
+  compactRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ring: { borderWidth: 3, borderColor: 'transparent', padding: 1 },
+  ringGold: { borderColor: GOLD },
+  name: { flexShrink: 1, fontWeight: '700', color: '#FFFFFF' },
+  score: { textAlign: 'right', fontWeight: '800', color: '#FFFFFF' },
+  badge: { position: 'absolute', top: -14, right: 16, paddingHorizontal: 12, paddingVertical: 3, borderRadius: 14, backgroundColor: GOLD },
+  badgeText: { fontWeight: '800', color: '#3A2D00' },
+  chip: { position: 'absolute', top: 14, right: 14, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, backgroundColor: '#0F1525' },
+  chipText: { fontWeight: '700', color: '#AEB8D0' },
 });
