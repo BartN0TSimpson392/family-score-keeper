@@ -133,7 +133,7 @@ export default function Board() {
                   {compact ? (
                     <View style={styles.compactRow}>
                       {avatar}
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, paddingRight: 56 }}>
                         {name}
                         {score}
                       </View>
